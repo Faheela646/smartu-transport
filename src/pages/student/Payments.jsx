@@ -1,0 +1,336 @@
+import { useState } from "react";
+import { toast } from "sonner";
+import {
+  CreditCard,
+  Receipt,
+  CheckCircle2,
+  AlertTriangle,
+  Download,
+  Calendar,
+  DollarSign,
+  FileText,
+  ShieldAlert,
+} from "lucide-react";
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import { useFineStore } from "@/store/useFineStore";
+import { useAuthStore } from "@/store/useAuthStore";
+import { formatCurrency, formatDate } from "@/lib/utils";
+
+export default function Payments() {
+  const user = useAuthStore((s) => s.user);
+  const { fines, clearFine, submitChallan } = useFineStore();
+
+  const [activeTab, setActiveTab] = useState("fee");
+  const [feePaid, setFeePaid] = useState(true);
+  const [payModalOpen, setPayModalOpen] = useState(false);
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("jazzcash");
+
+  const [fineTarget, setFineTarget] = useState(null);
+
+  const studentFines = user?.rollNo ? fines.filter((f) => f.rollNo === user.rollNo) : fines.slice(0, 2);
+
+  const paymentHistory = [
+    { month: "September 2026", amount: 5000, date: "2026-09-02", status: "Paid", receiptId: "RCP-2026-09" },
+    { month: "August 2026", amount: 5000, date: "2026-08-03", status: "Paid", receiptId: "RCP-2026-08" },
+    { month: "July 2026", amount: 5000, date: "2026-07-04", status: "Paid", receiptId: "RCP-2026-07" },
+  ];
+
+  const handlePayFee = () => {
+    setFeePaid(true);
+    setPayModalOpen(false);
+    toast.success("Payment successful! Transport fee for September 2026 recorded.");
+    setReceiptModalOpen(true);
+  };
+
+  const handlePayFine = () => {
+    if (!fineTarget) return;
+    clearFine(fineTarget.id);
+    toast.success(`Fine #${fineTarget.id} paid successfully.`);
+    setFineTarget(null);
+  };
+
+  return (
+    <div className="space-y-6 max-w-5xl mx-auto">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Transport Fee & Fines</h1>
+        <p className="text-sm text-muted-foreground">Manage your monthly transport fee subscription, payment history, and fine clearances.</p>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-3 max-w-md">
+          <TabsTrigger value="fee">Monthly Fee</TabsTrigger>
+          <TabsTrigger value="history">Payment History</TabsTrigger>
+          <TabsTrigger value="fines">Fines & Penalties</TabsTrigger>
+        </TabsList>
+
+        {/* SUBTAB 1: MONTHLY TRANSPORT FEE */}
+        <TabsContent value="fee" className="space-y-4 mt-4">
+          <Card className="border-2 border-primary/20 bg-gradient-to-br from-card via-card to-primary/5">
+            <CardHeader className="pb-3 border-b border-border/60">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="text-base font-bold">Current Month Subscription</CardTitle>
+                  <p className="text-xs text-muted-foreground">September 2026 • Route R-01 (D-Ground — Susan Road)</p>
+                </div>
+                <Badge variant={feePaid ? "success" : "destructive"} className="w-fit text-xs">
+                  {feePaid ? "🟢 Paid" : "🔴 Payment Pending"}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="rounded-xl bg-secondary/50 p-4 border border-border">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase">Transport Fee</p>
+                  <p className="text-2xl font-extrabold text-foreground mt-1">Rs. 5,000</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Fixed Semester Monthly Rate</p>
+                </div>
+
+                <div className="rounded-xl bg-secondary/50 p-4 border border-border">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase">Due Date</p>
+                  <p className="text-lg font-bold text-foreground mt-1 flex items-center gap-1.5">
+                    <Calendar className="h-4 w-4 text-primary" /> 10 Sep 2026
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Grace Period: 5 Days</p>
+                </div>
+
+                <div className="rounded-xl bg-secondary/50 p-4 border border-border">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase">Payment Status</p>
+                  <p className="text-lg font-bold text-foreground mt-1 flex items-center gap-1.5">
+                    {feePaid ? (
+                      <span className="text-emerald-600 flex items-center gap-1"><CheckCircle2 className="h-4 w-4" /> Cleared</span>
+                    ) : (
+                      <span className="text-rose-600 flex items-center gap-1"><AlertTriangle className="h-4 w-4" /> Due</span>
+                    )}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Receipt: RCP-2026-09</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                {feePaid ? (
+                  <>
+                    <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                      <CheckCircle2 className="h-4 w-4" /> Your transport pass is active for the current month.
+                    </div>
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <Button variant="outline" size="sm" onClick={() => setReceiptModalOpen(true)}>
+                        <Receipt className="h-4 w-4 mr-1.5" /> View Receipt
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-xs text-rose-600 dark:text-rose-400 font-medium">
+                      ⚠️ Please pay your fee before 10 Sep to avoid route suspension.
+                    </div>
+                    <Button onClick={() => setPayModalOpen(true)} className="w-full sm:w-auto">
+                      <CreditCard className="h-4 w-4 mr-1.5" /> Pay Fee Now
+                    </Button>
+                  </>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* SUBTAB 2: PAYMENT HISTORY */}
+        <TabsContent value="history" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-bold flex items-center gap-2">
+                <Receipt className="h-5 w-5 text-primary" /> Fee Payment Receipts History
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 sm:p-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Billing Month</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Payment Date</TableHead>
+                    <TableHead>Receipt ID</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paymentHistory.map((item, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell className="font-semibold text-xs text-foreground">{item.month}</TableCell>
+                      <TableCell className="text-xs font-bold">{formatCurrency(item.amount)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{item.date}</TableCell>
+                      <TableCell className="text-xs font-mono text-primary">{item.receiptId}</TableCell>
+                      <TableCell>
+                        <Badge variant="success">{item.status}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="outline" size="sm" onClick={() => setReceiptModalOpen(true)}>
+                          <Download className="h-3.5 w-3.5 mr-1" /> Receipt
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* SUBTAB 3: FINES & VIOLATIONS */}
+        <TabsContent value="fines" className="space-y-4 mt-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+                <ShieldAlert className="h-5 w-5 text-amber-500" /> My Fines & Violation Penalties
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {studentFines.length === 0 ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  No fine records found for your account. Maintain good transport discipline!
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {studentFines.map((fine) => (
+                    <Card key={fine.id} className="border-border bg-card/60">
+                      <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-foreground">Fine #{fine.id}</span>
+                            <Badge variant={fine.status === "Cleared" ? "success" : "destructive"}>
+                              {fine.status}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground leading-snug">{fine.reason}</p>
+                          <p className="text-[11px] text-muted-foreground">Issued Date: {formatDate(fine.date)} • Roll No: {fine.rollNo}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-base font-extrabold text-foreground">{formatCurrency(fine.amount)}</span>
+                          {fine.status !== "Cleared" && (
+                            <Button size="sm" onClick={() => setFineTarget(fine)}>
+                              Pay Fine
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Pay Fee Modal */}
+      <Dialog open={payModalOpen} onOpenChange={setPayModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Pay Monthly Transport Fee</DialogTitle>
+            <DialogDescription>Select your payment method for September 2026 (Rs. 5,000).</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Select Payment Method</label>
+              <Select value={selectedPaymentMethod} onValueChange={setSelectedPaymentMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="jazzcash">JazzCash Mobile Wallet</SelectItem>
+                  <SelectItem value="easypaisa">EasyPaisa Mobile Wallet</SelectItem>
+                  <SelectItem value="card">Debit / Credit Card (Visa/Mastercard)</SelectItem>
+                  <SelectItem value="bank">Direct Bank Transfer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="rounded-xl border border-border p-3.5 bg-secondary/30 text-xs space-y-1">
+              <p><span className="font-semibold">Student Name:</span> {user?.name || "Ahmed Raza"}</p>
+              <p><span className="font-semibold">Roll Number:</span> {user?.rollNo || "22F-3082"}</p>
+              <p><span className="font-semibold">Total Payable:</span> Rs. 5,000</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayModalOpen(false)}>Cancel</Button>
+            <Button onClick={handlePayFee}>Confirm Payment</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pay Fine Modal */}
+      <Dialog open={!!fineTarget} onOpenChange={(o) => !o && setFineTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Pay Fine #{fineTarget?.id}</DialogTitle>
+            <DialogDescription>Clear penalty fee for {fineTarget?.reason}.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs">
+            <p><span className="font-semibold">Amount Due:</span> {formatCurrency(fineTarget?.amount || 0)}</p>
+            <p><span className="font-semibold">Reason:</span> {fineTarget?.reason}</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFineTarget(null)}>Cancel</Button>
+            <Button onClick={handlePayFine}>Confirm Payment</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Printable Receipt Modal */}
+      <Dialog open={receiptModalOpen} onOpenChange={setReceiptModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-emerald-500" /> Official Transport Fee Receipt
+            </DialogTitle>
+            <DialogDescription>FAST NUCES CFD Transport Office</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 rounded-xl border border-border p-4 bg-card text-xs">
+            <div className="flex justify-between border-b border-border pb-2 font-bold">
+              <span>Receipt ID: RCP-2026-09</span>
+              <span className="text-emerald-600">STATUS: PAID</span>
+            </div>
+            <div className="space-y-1 text-muted-foreground">
+              <p><span className="font-semibold text-foreground">Student Name:</span> {user?.name || "Ahmed Raza"}</p>
+              <p><span className="font-semibold text-foreground">Roll No:</span> {user?.rollNo || "22F-3082"}</p>
+              <p><span className="font-semibold text-foreground">Route:</span> Route R-01 (D-Ground)</p>
+              <p><span className="font-semibold text-foreground">Billing Month:</span> September 2026</p>
+              <p><span className="font-semibold text-foreground">Amount Paid:</span> Rs. 5,000</p>
+              <p><span className="font-semibold text-foreground">Payment Date:</span> {new Date().toLocaleDateString()}</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => { toast.success("Receipt downloaded as PDF."); setReceiptModalOpen(false); }}>
+              <Download className="h-4 w-4 mr-1.5" /> Download PDF Receipt
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
