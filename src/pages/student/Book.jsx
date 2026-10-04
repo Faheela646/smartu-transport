@@ -16,17 +16,27 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useStudentStore } from "@/store/useStudentStore";
 import { useFleetStore } from "@/store/useFleetStore";
 import { useBookingStore } from "@/store/useBookingStore";
-import { STUDENTS } from "@/data/mockData";
 import { formatDate } from "@/lib/utils";
 
 export default function Book() {
   const user = useAuthStore((s) => s.user);
+  const students = useStudentStore((s) => s.students);
   const { routes } = useFleetStore();
   const { seatsAvailableFor, capacityFor, createBooking, bookingsForStudent, cancelBooking } = useBookingStore();
 
-  const student = STUDENTS.find((s) => s.rollNo === user?.rollNo);
+  const student = students.find(
+    (s) =>
+      (user?.rollNo && s.rollNo.toLowerCase() === user.rollNo.toLowerCase()) ||
+      (user?.email && s.email?.toLowerCase() === user.email.toLowerCase())
+  ) || {
+    name: user?.name || "Student",
+    rollNo: user?.rollNo || user?.loginId || "",
+    role: user?.role || "DAY_SCHOLAR",
+    routeId: "RT-01",
+  };
   const route = routes.find((r) => r.id === student?.routeId) || routes[0];
   const isHostelite = student?.role === "HOSTELITE";
 

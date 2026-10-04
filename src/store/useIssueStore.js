@@ -32,4 +32,12 @@ export const useIssueStore = create((set) => ({
     set((state) => ({ issues: [newIssue, ...state.issues] }));
     return newIssue;
   },
+
+  resolveIssue: (id, resolutionNote) => {
+    set((state) => ({
+      issues: state.issues.map((i) =>
+        i.id === id ? { ...i, status: "Resolved", resolutionNote } : i
+      ),
+    }));
+  },
 }));

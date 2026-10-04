@@ -3,10 +3,9 @@ import { persist } from "zustand/middleware";
 import { findAccount, ROLL_NO_REGEX } from "@/data/mockData";
 
 function validateLoginId(loginId) {
-  const trimmed = loginId.trim();
-  if (ROLL_NO_REGEX.test(trimmed)) return { ok: true, kind: "roll" };
-  if (/^[a-zA-Z][a-zA-Z0-9_]{2,}$/.test(trimmed)) return { ok: true, kind: "staff" };
-  return { ok: false, kind: null };
+  const trimmed = loginId ? loginId.trim() : "";
+  if (!trimmed) return { ok: false, kind: null };
+  return { ok: true, kind: "valid" };
 }
 
 export const useAuthStore = create(
@@ -21,7 +20,7 @@ export const useAuthStore = create(
           return {
             success: false,
             error:
-              "Enter a valid Roll Number (e.g. 22F-1111) or staff login ID (e.g. admin, driver_1).",
+              "Enter a valid Roll Number (e.g. 22F-3284), Email (e.g. f223284@cfd.nu.edu.pk), or staff ID.",
           };
         }
         const account = findAccount(loginId, password);
@@ -34,7 +33,8 @@ export const useAuthStore = create(
           name: account.name,
           role: account.role,
           loginId: account.loginId,
-          rollNo: /^(DAY_SCHOLAR|HOSTELITE)$/.test(account.role) ? account.loginId : undefined,
+          rollNo: account.rollNo || (/^(DAY_SCHOLAR|HOSTELITE)$/.test(account.role) ? account.loginId : undefined),
+          email: account.email,
           token,
         };
         set({ user, isAuthenticated: true });

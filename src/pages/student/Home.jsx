@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useStudentStore } from "@/store/useStudentStore";
 import { useFleetStore } from "@/store/useFleetStore";
 import { useAttendanceStore } from "@/store/useAttendanceStore";
 import { useFineStore } from "@/store/useFineStore";
@@ -29,17 +30,29 @@ import { initials, formatDate } from "@/lib/utils";
 export default function Home() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const students = useStudentStore((s) => s.students);
   const routes = useFleetStore((s) => s.routes);
   const buses = useFleetStore((s) => s.buses);
   const todayAttendance = useAttendanceStore((s) => s.todayAttendance);
   const fines = useFineStore((s) => s.fines);
 
-  // Student's route & bus
-  const studentRoute = routes.find((r) => r.id === "RT-01") || routes[0];
+  // Student profile lookup
+  const student = students.find(
+    (s) =>
+      (user?.rollNo && s.rollNo.toLowerCase() === user.rollNo.toLowerCase()) ||
+      (user?.email && s.email?.toLowerCase() === user.email.toLowerCase())
+  ) || {
+    name: user?.name || "Student",
+    rollNo: user?.rollNo || user?.loginId || "",
+    role: user?.role || "DAY_SCHOLAR",
+    routeId: "RT-01",
+  };
+
+  const studentRoute = routes.find((r) => r.id === student.routeId) || routes[0];
   const assignedBus = buses.find((b) => b.id === studentRoute?.busId) || buses[0];
   const pickupStop = studentRoute?.stops[1] || studentRoute?.stops[0];
 
-  const studentFines = user?.rollNo ? fines.filter((f) => f.rollNo === user.rollNo && f.status !== "Cleared") : [];
+  const studentFines = student.rollNo ? fines.filter((f) => f.rollNo === student.rollNo && f.status !== "Cleared") : [];
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -55,20 +68,20 @@ export default function Home() {
         <div className="flex items-center gap-4">
           <Avatar className="h-14 w-14 border-2 border-primary/20">
             <AvatarFallback className="bg-primary text-primary-foreground text-lg font-bold">
-              {initials(user?.name || "Ahmed Raza")}
+              {initials(student.name)}
             </AvatarFallback>
           </Avatar>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold tracking-tight text-foreground">
-                {getGreeting()}, {user?.name?.split(" ")[0] || "Ahmed"}! 👋
+                {getGreeting()}, {student.name.split(" ")[0]}! 👋
               </h1>
-              <Badge variant="accent" className="text-[10px]">
-                Day Scholar
+              <Badge variant={student.role === "HOSTELITE" ? "accent" : "secondary"} className="text-[10px]">
+                {student.role === "HOSTELITE" ? "Hostelite" : "Day Scholar"}
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Roll No: <span className="font-mono font-medium text-foreground">{user?.rollNo || "22F-3082"}</span> • FAST CFD Campus
+              Roll No: <span className="font-mono font-medium text-foreground">{student.rollNo}</span> • FAST CFD Campus
             </p>
           </div>
         </div>

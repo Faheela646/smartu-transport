@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { KeyRound } from "lucide-react";
+import { KeyRound, LogOut, ShieldAlert } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,12 +13,20 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { initials } from "@/lib/utils";
 
 export default function Settings() {
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const changePassword = useAuthStore((s) => s.changePassword);
   const { theme, setTheme } = useTheme();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
+
+  const handleLogout = () => {
+    logout();
+    toast.success("Logged out successfully.");
+    navigate("/login");
+  };
 
   const handleChangePassword = (e) => {
     e.preventDefault();
@@ -36,18 +45,25 @@ export default function Settings() {
     <div className="max-w-2xl space-y-5">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Settings</h1>
-        <p className="text-sm text-muted-foreground">Manage your profile and preferences.</p>
+        <p className="text-sm text-muted-foreground">Manage your profile, account security, and preferences.</p>
       </div>
 
       <Card>
-        <CardContent className="flex items-center gap-4 p-5">
-          <Avatar className="h-14 w-14">
-            <AvatarFallback className="text-base">{initials(user?.name || "AD")}</AvatarFallback>
-          </Avatar>
-          <div>
-            <p className="font-semibold text-foreground">{user?.name}</p>
-            <p className="text-sm text-muted-foreground">Login ID: {user?.loginId}</p>
+        <CardContent className="flex items-center justify-between p-5">
+          <div className="flex items-center gap-4">
+            <Avatar className="h-14 w-14 border border-primary/20">
+              <AvatarFallback className="bg-primary text-primary-foreground text-base font-semibold">
+                {initials(user?.name || "AD")}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <p className="font-semibold text-foreground">{user?.name}</p>
+              <p className="text-sm text-muted-foreground">Login ID: {user?.loginId}</p>
+            </div>
           </div>
+          <Button variant="outline" size="sm" onClick={handleLogout} className="text-destructive border-destructive/30 hover:bg-destructive/10">
+            <LogOut className="h-4 w-4 mr-1.5" /> Log out
+          </Button>
         </CardContent>
       </Card>
 
@@ -84,9 +100,27 @@ export default function Settings() {
               </div>
             </div>
             <Button type="submit">
-              <KeyRound className="h-4 w-4" /> Update Password
+              <KeyRound className="h-4 w-4 mr-1.5" /> Update Password
             </Button>
           </form>
+        </CardContent>
+      </Card>
+
+      {/* Account Session Logout Card */}
+      <Card className="border-destructive/30 bg-destructive/5">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-bold text-destructive flex items-center gap-2">
+            <ShieldAlert className="h-5 w-5" /> Admin Session Security
+          </CardTitle>
+          <CardDescription>Log out of your administrator account session.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-center justify-between">
+          <div className="text-xs text-muted-foreground">
+            End active session on this device.
+          </div>
+          <Button variant="destructive" size="sm" onClick={handleLogout} className="gap-1.5">
+            <LogOut className="h-4 w-4" /> Log out of Admin Portal
+          </Button>
         </CardContent>
       </Card>
     </div>

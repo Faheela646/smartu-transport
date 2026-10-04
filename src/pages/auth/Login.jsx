@@ -70,13 +70,13 @@ export default function Login() {
           <CardContent className="p-6">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="loginId">Roll Number / Staff ID</Label>
+                <Label htmlFor="loginId">Roll Number / Student Email / Staff ID</Label>
                 <Input
                   id="loginId"
-                  placeholder="e.g. 22F-3082 or admin"
+                  placeholder="e.g. 22F-3082, f223082@cfd.nu.edu.pk, or admin"
                   value={loginId}
                   onChange={(e) => setLoginId(e.target.value)}
-                  autoCapitalize="characters"
+                  autoCapitalize="none"
                   required
                 />
               </div>
@@ -131,8 +131,8 @@ export default function Login() {
 
         <div className="mt-4 rounded-lg border border-white/15 bg-white/5 p-3 text-[11px] leading-relaxed text-white/70">
           <p className="mb-1 font-semibold text-white/90">Demo accounts</p>
-          Admin: <code>admin / admin123</code> · Day Scholar: <code>22F-3082 / student123</code> ·
-          Hostelite: <code>22F-3091 / student123</code> · Conductor: <code>conductor_1 / conductor123</code> ·
+          Admin: <code>admin / admin123</code> · Student (Faheela): <code>f223284@cfd.nu.edu.pk / 3284@fast</code> ·
+          Student (Roll): <code>22F-3284 / 3284@fast</code> · Conductor: <code>conductor_1 / conductor123</code> ·
           Driver: <code>driver_1 / driver123</code>
         </div>
       </div>

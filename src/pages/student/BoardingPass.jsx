@@ -4,8 +4,8 @@ import { ShieldCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuthStore } from "@/store/useAuthStore";
+import { useStudentStore } from "@/store/useStudentStore";
 import { useFleetStore } from "@/store/useFleetStore";
-import { STUDENTS } from "@/data/mockData";
 
 const REFRESH_SECONDS = 30;
 
@@ -20,9 +20,21 @@ function mockHash(input) {
 
 export default function BoardingPass() {
   const user = useAuthStore((s) => s.user);
+  const students = useStudentStore((s) => s.students);
   const { routes } = useFleetStore();
-  const student = STUDENTS.find((s) => s.rollNo === user?.rollNo);
-  const route = routes.find((r) => r.id === student?.routeId);
+
+  const student = students.find(
+    (s) =>
+      (user?.rollNo && s.rollNo.toLowerCase() === user.rollNo.toLowerCase()) ||
+      (user?.email && s.email?.toLowerCase() === user.email.toLowerCase())
+  ) || {
+    name: user?.name || "Student",
+    rollNo: user?.rollNo || user?.loginId || "",
+    role: user?.role || "DAY_SCHOLAR",
+    routeId: "RT-01",
+  };
+
+  const route = routes.find((r) => r.id === student?.routeId) || routes[0];
 
   const [secondsLeft, setSecondsLeft] = useState(REFRESH_SECONDS);
   const [nonce, setNonce] = useState(0);

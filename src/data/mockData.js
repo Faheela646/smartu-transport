@@ -117,25 +117,52 @@ export const CONDUCTORS = [
   { id: "CND-05", name: "Sajid Iqbal", loginId: "conductor_5", phone: "0308-5556677", status: "Active", assignedBusId: "BUS-105" },
 ];
 
+// Helper functions to generate student credentials according to FAST CFD format:
+// Email: f223284@cfd.nu.edu.pk (Always starts with 'f' + year + serial digits @ cfd.nu.edu.pk)
+// Password: 3284@fast (serial digits + @fast)
+export function generateStudentEmail(rollNo) {
+  if (!rollNo) return "";
+  const trimmed = rollNo.trim();
+  const match = trimmed.match(/^(\d+)[A-Za-z]+-?(\d+)$/);
+  if (match) {
+    const [, year, num] = match;
+    return `f${year}${num}@cfd.nu.edu.pk`;
+  }
+  const digits = (trimmed.match(/\d+/g) || []).join("");
+  return `f${digits}@cfd.nu.edu.pk`;
+}
+
+export function generateStudentPassword(rollNo) {
+  if (!rollNo) return "";
+  const trimmed = rollNo.trim();
+  const hyphenMatch = trimmed.match(/-(\d+)$/);
+  if (hyphenMatch) {
+    return `${hyphenMatch[1]}@fast`;
+  }
+  const digits = trimmed.replace(/\D/g, "");
+  return `${digits || "1234"}@fast`;
+}
+
 // ---------------------------------------------------------------------------
 // STUDENTS
 // ---------------------------------------------------------------------------
 export const STUDENTS = [
-  { id: "STU-001", name: "Ahmed Raza", rollNo: "22F-3082", role: "DAY_SCHOLAR", routeId: "RT-01", cnic: "33202-1234567-1", feeStatus: "Paid" },
-  { id: "STU-002", name: "Fatima Noor", rollNo: "22F-3091", role: "HOSTELITE", routeId: "RT-02", cnic: "33202-2345678-2", feeStatus: "Paid" },
-  { id: "STU-003", name: "Hassan Ali", rollNo: "21F-2871", role: "DAY_SCHOLAR", routeId: "RT-03", cnic: "33202-3456789-3", feeStatus: "Pending" },
-  { id: "STU-004", name: "Ayesha Siddiqui", rollNo: "23F-4410", role: "HOSTELITE", routeId: "RT-04", cnic: "33202-4567890-4", feeStatus: "Paid" },
-  { id: "STU-005", name: "Usman Tariq", rollNo: "22K-1187", role: "DAY_SCHOLAR", routeId: "RT-01", cnic: "33202-5678901-5", feeStatus: "Paid" },
-  { id: "STU-006", name: "Zainab Malik", rollNo: "21I-0965", role: "HOSTELITE", routeId: "RT-02", cnic: "33202-6789012-6", feeStatus: "Paid" },
-  { id: "STU-007", name: "Bilal Sarwar", rollNo: "23CFD-1021", role: "DAY_SCHOLAR", routeId: "RT-03", cnic: "33202-7890123-7", feeStatus: "Paid" },
-  { id: "STU-008", name: "Mahnoor Khan", rollNo: "22F-3140", role: "HOSTELITE", routeId: "RT-04", cnic: "33202-8901234-8", feeStatus: "Pending" },
-  { id: "STU-009", name: "Talha Farooq", rollNo: "21F-2733", role: "DAY_SCHOLAR", routeId: "RT-02", cnic: "33202-9012345-9", feeStatus: "Paid" },
-  { id: "STU-010", name: "Sana Aslam", rollNo: "24F-5021", role: "DAY_SCHOLAR", routeId: "RT-01", cnic: "33202-0123456-0", feeStatus: "Paid" },
-  { id: "STU-011", name: "Hamza Sheikh", rollNo: "23K-1345", role: "HOSTELITE", routeId: "RT-04", cnic: "33202-1122334-1", feeStatus: "Paid" },
-  { id: "STU-012", name: "Iqra Naveed", rollNo: "22I-0871", role: "DAY_SCHOLAR", routeId: "RT-03", cnic: "33202-2233445-2", feeStatus: "Paid" },
+  { id: "STU-001", name: "Ahmed Raza", rollNo: "22F-3082", email: "f223082@cfd.nu.edu.pk", password: "3082@fast", role: "DAY_SCHOLAR", routeId: "RT-01", cnic: "33202-1234567-1", feeStatus: "Paid" },
+  { id: "STU-002", name: "Fatima Noor", rollNo: "22F-3091", email: "f223091@cfd.nu.edu.pk", password: "3091@fast", role: "HOSTELITE", routeId: "RT-02", cnic: "33202-2345678-2", feeStatus: "Paid" },
+  { id: "STU-003", name: "Hassan Ali", rollNo: "21F-2871", email: "f212871@cfd.nu.edu.pk", password: "2871@fast", role: "DAY_SCHOLAR", routeId: "RT-03", cnic: "33202-3456789-3", feeStatus: "Pending" },
+  { id: "STU-004", name: "Ayesha Siddiqui", rollNo: "23F-4410", email: "f234410@cfd.nu.edu.pk", password: "4410@fast", role: "HOSTELITE", routeId: "RT-04", cnic: "33202-4567890-4", feeStatus: "Paid" },
+  { id: "STU-005", name: "Usman Tariq", rollNo: "22K-1187", email: "f221187@cfd.nu.edu.pk", password: "1187@fast", role: "DAY_SCHOLAR", routeId: "RT-01", cnic: "33202-5678901-5", feeStatus: "Paid" },
+  { id: "STU-006", name: "Zainab Malik", rollNo: "21I-0965", email: "f210965@cfd.nu.edu.pk", password: "0965@fast", role: "HOSTELITE", routeId: "RT-02", cnic: "33202-6789012-6", feeStatus: "Paid" },
+  { id: "STU-007", name: "Bilal Sarwar", rollNo: "23CFD-1021", email: "f231021@cfd.nu.edu.pk", password: "1021@fast", role: "DAY_SCHOLAR", routeId: "RT-03", cnic: "33202-7890123-7", feeStatus: "Paid" },
+  { id: "STU-008", name: "Mahnoor Khan", rollNo: "22F-3140", email: "f223140@cfd.nu.edu.pk", password: "3140@fast", role: "HOSTELITE", routeId: "RT-04", cnic: "33202-8901234-8", feeStatus: "Pending" },
+  { id: "STU-009", name: "Talha Farooq", rollNo: "21F-2733", email: "f212733@cfd.nu.edu.pk", password: "2733@fast", role: "DAY_SCHOLAR", routeId: "RT-02", cnic: "33202-9012345-9", feeStatus: "Paid" },
+  { id: "STU-010", name: "Sana Aslam", rollNo: "24F-5021", email: "f245021@cfd.nu.edu.pk", password: "5021@fast", role: "DAY_SCHOLAR", routeId: "RT-01", cnic: "33202-0123456-0", feeStatus: "Paid" },
+  { id: "STU-011", name: "Hamza Sheikh", rollNo: "23K-1345", email: "f231345@cfd.nu.edu.pk", password: "1345@fast", role: "HOSTELITE", routeId: "RT-04", cnic: "33202-1122334-1", feeStatus: "Paid" },
+  { id: "STU-012", name: "Iqra Naveed", rollNo: "22I-0871", email: "f220871@cfd.nu.edu.pk", password: "0871@fast", role: "DAY_SCHOLAR", routeId: "RT-03", cnic: "33202-2233445-2", feeStatus: "Paid" },
+  { id: "STU-013", name: "Faheela", rollNo: "22F-3284", email: "f223284@cfd.nu.edu.pk", password: "3284@fast", role: "DAY_SCHOLAR", routeId: "RT-01", cnic: "33202-9988776-5", feeStatus: "Paid" },
 ];
 
-// The demo account you actually log in with (password: "student123")
+// The demo account you actually log in with (password: "3082@fast" or "student123")
 export const DEMO_STUDENT = STUDENTS[0]; // Ahmed Raza, 22F-3082, Day Scholar
 export const DEMO_HOSTELITE = STUDENTS[1]; // Fatima Noor, 22F-3091, Hostelite
 
@@ -183,27 +210,88 @@ export const ANNOUNCEMENTS = [
 // ---------------------------------------------------------------------------
 // AUTH — pre-provisioned accounts (mock)
 // ---------------------------------------------------------------------------
-// In a real system these would be hashed & stored server-side. Here we hold a
-// simple lookup table keyed by loginId to simulate the provisioning admin does.
 export const MOCK_ACCOUNTS = [
   { loginId: "admin", password: "admin123", role: "ADMIN", name: "Dr. Kashif Zafar", refId: "ADM-01" },
   ...DRIVERS.map((d) => ({ loginId: d.loginId, password: "driver123", role: "DRIVER", name: d.name, refId: d.id })),
   ...CONDUCTORS.map((c) => ({ loginId: c.loginId, password: "conductor123", role: "CONDUCTOR", name: c.name, refId: c.id })),
   ...STUDENTS.map((s) => ({
     loginId: s.rollNo,
-    password: "student123",
+    rollNo: s.rollNo,
+    email: s.email,
+    password: s.password,
     role: s.role,
     name: s.name,
     refId: s.id,
   })),
 ];
 
-export const ROLL_NO_REGEX = /^\d{2}[A-Z]{1,4}-\d{4}$/;
+export const ROLL_NO_REGEX = /^\d{2}[A-Za-z]{1,4}-\d{4}$/i;
 
 export function findAccount(loginId, password) {
-  return MOCK_ACCOUNTS.find(
-    (a) => a.loginId.toLowerCase() === loginId.trim().toLowerCase() && a.password === password
-  );
+  if (!loginId || !password) return null;
+  const cleanLogin = loginId.trim().toLowerCase();
+  const cleanPass = password.trim();
+
+  const isUserMatch = (cand) => {
+    if (!cand) return false;
+    const rNo = (cand.rollNo || cand.loginId || "").toLowerCase();
+    const email = (cand.email || generateStudentEmail(cand.rollNo || cand.loginId) || "").toLowerCase();
+    const lId = (cand.loginId || "").toLowerCase();
+    const rNoStripped = rNo.replace(/[^a-z0-9]/g, "");
+    const loginStripped = cleanLogin.replace(/[^a-z0-9]/g, "");
+
+    return (
+      cleanLogin === lId ||
+      cleanLogin === rNo ||
+      cleanLogin === email ||
+      cleanLogin.split("@")[0] === email.split("@")[0] ||
+      cleanLogin.split("@")[0] === rNo ||
+      (loginStripped && loginStripped === rNoStripped)
+    );
+  };
+
+  const isPassMatch = (cand) => {
+    if (!cand) return false;
+    const expectedPass = cand.password || generateStudentPassword(cand.rollNo || cand.loginId);
+    return (
+      expectedPass === cleanPass ||
+      expectedPass.toLowerCase() === cleanPass.toLowerCase() ||
+      (cand.role !== "ADMIN" && (cleanPass === "student123" || cleanPass === "driver123" || cleanPass === "conductor123"))
+    );
+  };
+
+  // 1. Search in pre-provisioned MOCK_ACCOUNTS
+  let account = MOCK_ACCOUNTS.find((a) => isUserMatch(a) && isPassMatch(a));
+  if (account) return account;
+
+  // 2. Search dynamically registered students in localStorage
+  try {
+    let studentList = [];
+    const raw = typeof window !== "undefined" ? localStorage.getItem("smartu-students") : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.state?.students) {
+        studentList = parsed.state.students;
+      }
+    }
+
+    const sMatch = studentList.find((s) => isUserMatch(s) && isPassMatch(s));
+    if (sMatch) {
+      return {
+        loginId: sMatch.rollNo,
+        rollNo: sMatch.rollNo,
+        email: sMatch.email || generateStudentEmail(sMatch.rollNo),
+        password: sMatch.password || generateStudentPassword(sMatch.rollNo),
+        role: sMatch.role || "DAY_SCHOLAR",
+        name: sMatch.name,
+        refId: sMatch.id,
+      };
+    }
+  } catch (e) {
+    console.error("Error finding account:", e);
+  }
+
+  return null;
 }
 
 export const ROLE_HOME = {

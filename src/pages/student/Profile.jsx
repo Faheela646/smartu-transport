@@ -12,6 +12,8 @@ import {
   Bus,
   MapPin,
   CheckCircle2,
+  Mail,
+  Key,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,14 +24,34 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useTheme } from "next-themes";
 import { useAuthStore } from "@/store/useAuthStore";
-import { useAttendanceStore } from "@/store/useAttendanceStore";
+import { useStudentStore } from "@/store/useStudentStore";
+import { useFleetStore } from "@/store/useFleetStore";
 import { initials } from "@/lib/utils";
+import { generateStudentEmail, generateStudentPassword } from "@/data/mockData";
 
 export default function Profile() {
   const navigate = useNavigate();
   const { user, logout, changePassword } = useAuthStore();
-  const rfidCard = useAttendanceStore((s) => s.rfidCard);
+  const students = useStudentStore((s) => s.students);
+  const routes = useFleetStore((s) => s.routes);
   const { theme, setTheme } = useTheme();
+
+  const student = students.find(
+    (s) =>
+      (user?.rollNo && s.rollNo.toLowerCase() === user.rollNo.toLowerCase()) ||
+      (user?.email && s.email?.toLowerCase() === user.email.toLowerCase())
+  ) || {
+    name: user?.name || "Student",
+    rollNo: user?.rollNo || user?.loginId || "22F-3082",
+    role: user?.role || "DAY_SCHOLAR",
+    routeId: "RT-01",
+  };
+
+  const assignedRoute = routes.find((r) => r.id === student.routeId) || routes[0];
+  const pickupStop = assignedRoute?.stops[1] || assignedRoute?.stops[0] || { name: "Main Stop" };
+  const studentEmail = student.email || generateStudentEmail(student.rollNo);
+  const studentPassword = student.password || generateStudentPassword(student.rollNo);
+  const rfidNumber = `RFID-${student.rollNo.replace(/[^A-Za-z0-9]/g, "")}`;
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [currentPass, setCurrentPass] = useState("");
@@ -62,16 +84,18 @@ export default function Profile() {
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16 border-2 border-primary/20">
               <AvatarFallback className="bg-primary text-primary-foreground text-xl font-bold">
-                {initials(user?.name || "Ahmed Raza")}
+                {initials(student.name)}
               </AvatarFallback>
             </Avatar>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-foreground">{user?.name || "Ahmed Raza"}</h2>
-                <Badge variant="accent">Day Scholar</Badge>
+                <h2 className="text-lg font-bold text-foreground">{student.name}</h2>
+                <Badge variant={student.role === "HOSTELITE" ? "accent" : "secondary"}>
+                  {student.role === "HOSTELITE" ? "Hostelite" : "Day Scholar"}
+                </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Roll Number: <span className="font-mono font-medium text-foreground">{user?.rollNo || "22F-3082"}</span>
+                Roll Number: <span className="font-mono font-medium text-foreground">{student.rollNo}</span>
               </p>
               <p className="text-xs text-muted-foreground">FAST NUCES Chiniot-Faisalabad Campus</p>
             </div>
@@ -79,6 +103,32 @@ export default function Profile() {
           <Button variant="outline" size="sm" onClick={() => { logout(); navigate("/login"); }} className="text-destructive border-destructive/30 hover:bg-destructive/10">
             <LogOut className="h-4 w-4 mr-1.5" /> Log out
           </Button>
+        </CardContent>
+      </Card>
+
+      {/* Account Login Credentials Box */}
+      <Card className="border-primary/30 bg-primary/5">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base font-bold flex items-center gap-2 text-primary">
+            <Shield className="h-5 w-5" /> Allocated Student Login Account
+          </CardTitle>
+          <CardDescription>Use these credentials to log in on any device.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div className="rounded-xl border border-border p-3 bg-background/90 space-y-1">
+              <span className="text-muted-foreground flex items-center gap-1 font-medium">
+                <Mail className="h-3.5 w-3.5 text-primary" /> Allocated Email Address
+              </span>
+              <p className="font-mono font-bold text-sm text-foreground">{studentEmail}</p>
+            </div>
+            <div className="rounded-xl border border-border p-3 bg-background/90 space-y-1">
+              <span className="text-muted-foreground flex items-center gap-1 font-medium">
+                <Key className="h-3.5 w-3.5 text-emerald-600" /> Password
+              </span>
+              <p className="font-mono font-bold text-sm text-emerald-600">{studentPassword}</p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -94,26 +144,26 @@ export default function Profile() {
             <div className="rounded-xl border border-border p-3.5 bg-background/80 space-y-1">
               <span className="text-muted-foreground">Assigned Route</span>
               <p className="font-bold text-sm text-foreground flex items-center gap-1.5">
-                <Bus className="h-4 w-4 text-primary" /> Route R-01 (D-Ground)
+                <Bus className="h-4 w-4 text-primary" /> {assignedRoute.shortName || assignedRoute.name}
               </p>
             </div>
 
             <div className="rounded-xl border border-border p-3.5 bg-background/80 space-y-1">
               <span className="text-muted-foreground">Designated Pickup Stop</span>
               <p className="font-bold text-sm text-foreground flex items-center gap-1.5">
-                <MapPin className="h-4 w-4 text-emerald-500" /> Kohinoor Chowk
+                <MapPin className="h-4 w-4 text-emerald-500" /> {pickupStop.name}
               </p>
             </div>
 
             <div className="rounded-xl border border-border p-3.5 bg-background/80 space-y-1">
               <span className="text-muted-foreground">Associated RFID Number</span>
-              <p className="font-mono font-bold text-sm text-foreground">{rfidCard.cardNumber}</p>
+              <p className="font-mono font-bold text-sm text-foreground">{rfidNumber}</p>
             </div>
 
             <div className="rounded-xl border border-border p-3.5 bg-background/80 space-y-1">
               <span className="text-muted-foreground">Transport Subscription</span>
               <p className="font-bold text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                <CheckCircle2 className="h-4 w-4" /> Active (Paid - Sept 2026)
+                <CheckCircle2 className="h-4 w-4" /> Active ({student.feeStatus === "Paid" ? "Paid" : "Registered"})
               </p>
             </div>
           </div>

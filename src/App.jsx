@@ -14,6 +14,11 @@ import AdminFleet from "@/pages/admin/Fleet";
 import AdminRoutes from "@/pages/admin/Routes";
 import AdminAnnouncements from "@/pages/admin/Announcements";
 import AdminSettings from "@/pages/admin/Settings";
+import AdminFines from "@/pages/admin/FinesPayments";
+import AdminIssues from "@/pages/admin/AdminIssues";
+import AdminLiveTracking from "@/pages/admin/AdminLiveTracking";
+import AdminReports from "@/pages/admin/AdminReports";
+import AdminAttendance from "@/pages/admin/AdminAttendance";
 
 import StudentLayout from "@/components/shared/StudentLayout";
 import StudentHome from "@/pages/student/Home";
@@ -56,6 +61,11 @@ function App() {
             <Route path="routes" element={<AdminRoutes />} />
             <Route path="announcements" element={<AdminAnnouncements />} />
             <Route path="settings" element={<AdminSettings />} />
+            <Route path="fines" element={<AdminFines />} />
+            <Route path="issues" element={<AdminIssues />} />
+            <Route path="tracking" element={<AdminLiveTracking />} />
+            <Route path="reports" element={<AdminReports />} />
+            <Route path="attendance" element={<AdminAttendance />} />
           </Route>
 
           <Route

@@ -100,3 +100,12 @@
   font-family: "Inter", sans-serif;
   z-index: 0;
 }
+
+@keyframes scan-line {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(160px); }
+  100% { transform: translateY(0); }
+}
+.animate-scan {
+  animation: scan-line 2s linear infinite;
+}

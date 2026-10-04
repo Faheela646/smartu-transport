@@ -111,12 +111,81 @@ export default function Attendance() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="relative mx-auto flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border p-6 sm:p-10 bg-secondary/20 text-center max-w-md">
+          <div className="relative mx-auto flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border p-6 sm:p-10 bg-secondary/20 text-center max-w-md overflow-hidden">
             {isScanning ? (
-              <div className="py-8 space-y-3">
-                <RefreshCw className="h-10 w-10 text-primary animate-spin mx-auto" />
-                <p className="text-sm font-semibold text-foreground">Scanning Shuttle QR Code...</p>
-                <p className="text-xs text-muted-foreground">Validating trip authentication and boarding time</p>
+              <div className="w-full relative">
+                {/* Real Camera Feed */}
+                <video
+                  id="qr-video"
+                  className="w-full h-64 object-cover rounded-xl bg-black"
+                  autoPlay
+                  playsInline
+                  muted
+                  ref={(videoRef) => {
+                    if (videoRef && !videoRef.srcObject) {
+                      navigator.mediaDevices
+                        .getUserMedia({ video: { facingMode: "environment" } })
+                        .then((stream) => {
+                          videoRef.srcObject = stream;
+                        })
+                        .catch((err) => {
+                          console.error("Camera access denied:", err);
+                          toast.error("Camera access is required to scan QR codes.");
+                          setIsScanning(false);
+                        });
+                    }
+                  }}
+                ></video>
+                
+                {/* Scanner Overlay */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-40 h-40 border-2 border-primary rounded-lg relative">
+                    <div className="absolute top-0 left-0 w-full h-0.5 bg-primary/80 animate-scan"></div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-col items-center space-y-2">
+                  <p className="text-sm font-semibold text-foreground">Point camera at conductor's QR Code</p>
+                  <Button 
+                    variant="default" 
+                    className="w-full sm:w-auto" 
+                    onClick={() => {
+                      // Stop camera streams
+                      const video = document.getElementById("qr-video");
+                      if (video && video.srcObject) {
+                        video.srcObject.getTracks().forEach(t => t.stop());
+                      }
+                      // Simulate successful scan processing
+                      setScanResult(null);
+                      setTimeout(() => {
+                        setIsScanning(false);
+                        markAttendance({
+                          routeId: activeRoute.id,
+                          busId: activeBus.id,
+                          stop: "Kohinoor Chowk",
+                          method: "QR Scan",
+                        });
+                        setScanResult("success");
+                        toast.success("✅ Attendance Marked Successfully!");
+                      }, 500);
+                    }}
+                  >
+                    Simulate Read
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => {
+                      const video = document.getElementById("qr-video");
+                      if (video && video.srcObject) {
+                        video.srcObject.getTracks().forEach(t => t.stop());
+                      }
+                      setIsScanning(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
               </div>
             ) : scanResult === "success" || todayAttendance.marked ? (
               <div className="py-4 space-y-3">
@@ -128,8 +197,8 @@ export default function Attendance() {
                   <p className="text-xs text-muted-foreground mt-1">Verified on Route R-01 (BUS-101 • FSD-2023)</p>
                 </div>
                 <div className="pt-2">
-                  <Button variant="outline" size="sm" onClick={() => handleSimulateScan(true)}>
-                    Rescan QR Code
+                  <Button variant="outline" size="sm" onClick={() => setIsScanning(true)}>
+                    Scan Another QR Code
                   </Button>
                 </div>
               </div>
@@ -140,10 +209,10 @@ export default function Attendance() {
                 </div>
                 <div>
                   <p className="text-base font-bold text-rose-600">Invalid or Expired QR Code</p>
-                  <p className="text-xs text-muted-foreground mt-1">Make sure you are scanning the active QR code inside your assigned shuttle.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Make sure you are scanning the active QR code shown by the conductor.</p>
                 </div>
                 <div className="flex items-center gap-2 justify-center pt-2">
-                  <Button size="sm" onClick={() => handleSimulateScan(true)}>Try Again</Button>
+                  <Button size="sm" onClick={() => setIsScanning(true)}>Try Again</Button>
                   <Button variant="outline" size="sm" onClick={() => navigate("/student/report-issue")}>Report Issue</Button>
                 </div>
               </div>
@@ -153,17 +222,14 @@ export default function Attendance() {
                   <QrCode className="h-10 w-10" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-foreground">Scan QR Code inside Shuttle</p>
+                  <p className="text-sm font-bold text-foreground">Scan QR Code</p>
                   <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
-                    Point your device camera at the QR code displayed near the bus conductor station.
+                    Point your device camera at the QR code displayed by the bus conductor.
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
-                  <Button onClick={() => handleSimulateScan(true)} className="gap-2">
-                    <Camera className="h-4 w-4" /> Scan Boarding QR Code
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleSimulateScan(false)}>
-                    Test Invalid QR
+                  <Button onClick={() => setIsScanning(true)} className="gap-2">
+                    <Camera className="h-4 w-4" /> Open Camera Scanner
                   </Button>
                 </div>
               </div>

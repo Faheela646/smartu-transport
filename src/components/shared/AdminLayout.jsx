@@ -9,6 +9,11 @@ import {
   Settings,
   LogOut,
   Bell,
+  Receipt,
+  Map,
+  ClipboardList,
+  MessageSquareWarning,
+  BarChart3,
 } from "lucide-react";
 import { Logo } from "@/components/shared/Logo";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
@@ -33,7 +38,12 @@ const NAV_ITEMS = [
   { to: "/admin/staff", label: "Staff", icon: UserCog },
   { to: "/admin/fleet", label: "Fleet", icon: Bus },
   { to: "/admin/routes", label: "Routes", icon: RouteIcon },
+  { to: "/admin/tracking", label: "Live Tracking", icon: Map },
+  { to: "/admin/attendance", label: "Attendance Logs", icon: ClipboardList },
+  { to: "/admin/fines", label: "Fines & Payments", icon: Receipt },
+  { to: "/admin/issues", label: "Helpdesk", icon: MessageSquareWarning },
   { to: "/admin/announcements", label: "Announcements", icon: Megaphone },
+  { to: "/admin/reports", label: "Reports", icon: BarChart3 },
   { to: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
@@ -41,6 +51,11 @@ export default function AdminLayout() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const notifications = useSocketStore((s) => s.notifications);
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
 
   return (
     <div className="min-h-screen bg-secondary/40 lg:grid lg:grid-cols-[260px_1fr]">
@@ -70,7 +85,11 @@ export default function AdminLayout() {
           ))}
         </nav>
         <div className="border-t border-border p-3">
-          <Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground" onClick={() => { logout(); navigate("/login"); }}>
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-3 text-destructive hover:bg-destructive/10 hover:text-destructive font-medium"
+            onClick={handleLogout}
+          >
             <LogOut className="h-4 w-4" />
             Log out
           </Button>
@@ -98,11 +117,14 @@ export default function AdminLayout() {
                 </Badge>
               )}
             </div>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 rounded-lg py-1 pl-1 pr-2 hover:bg-secondary">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback>{initials(user?.name || "AD")}</AvatarFallback>
+                  <Avatar className="h-8 w-8 border border-primary/20">
+                    <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
+                      {initials(user?.name || "AD")}
+                    </AvatarFallback>
                   </Avatar>
                   <span className="hidden text-sm font-medium sm:block">{user?.name}</span>
                 </button>
@@ -110,12 +132,26 @@ export default function AdminLayout() {
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuLabel>Signed in as Admin</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate("/admin/settings")}>Profile & Settings</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { logout(); navigate("/login"); }}>
+                <DropdownMenuItem onClick={() => navigate("/admin/settings")}>
+                  <Settings className="mr-2 h-4 w-4" /> Profile & Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer font-medium">
                   <LogOut className="mr-2 h-4 w-4" /> Log out
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* Direct header logout button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive h-9 px-3 gap-1.5 ml-1"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden md:inline font-medium">Log out</span>
+            </Button>
           </div>
         </header>
 
@@ -137,6 +173,13 @@ export default function AdminLayout() {
               {item.label}
             </NavLink>
           ))}
+          <button
+            onClick={handleLogout}
+            className="flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium bg-destructive/10 text-destructive border border-destructive/20"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            Log out
+          </button>
         </nav>
 
         <main className="flex-1 p-4 lg:p-8">
