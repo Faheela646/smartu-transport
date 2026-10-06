@@ -1,20 +1,13 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import { QRCodeSVG } from "qrcode.react";
 import {
   QrCode,
   CheckCircle2,
-  AlertTriangle,
-  Camera,
   Clock,
-  Bus,
   ShieldCheck,
-  RefreshCw,
-  CreditCard,
   FileCheck2,
+  CreditCard,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -25,216 +18,90 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { useAttendanceStore } from "@/store/useAttendanceStore";
+import { useAuthStore } from "@/store/useAuthStore";
+import { useStudentStore } from "@/store/useStudentStore";
 import { useFleetStore } from "@/store/useFleetStore";
+import { createStudentQrPayload } from "@/lib/studentQr";
 
 export default function Attendance() {
-  const navigate = useNavigate();
-  const { todayAttendance, attendanceHistory, rfidCard, markAttendance } = useAttendanceStore();
+  const user = useAuthStore((state) => state.user);
+  const students = useStudentStore((state) => state.students);
+  const { attendanceHistory, rfidCard } = useAttendanceStore();
   const { routes, buses } = useFleetStore();
-
-  const [isScanning, setIsScanning] = useState(false);
-  const [scanResult, setScanResult] = useState(null); // 'success' | 'invalid' | null
-
-  const activeRoute = routes[0]; // RT-01
-  const activeBus = buses[0]; // BUS-101
-
-  const handleSimulateScan = (isValid = true) => {
-    setIsScanning(true);
-    setScanResult(null);
-
-    setTimeout(() => {
-      setIsScanning(false);
-      if (isValid) {
-        markAttendance({
-          routeId: activeRoute.id,
-          busId: activeBus.id,
-          stop: "Kohinoor Chowk",
-          method: "QR Scan",
-        });
-        setScanResult("success");
-        toast.success("✅ Attendance Marked Successfully!");
-      } else {
-        setScanResult("invalid");
-        toast.error("⚠️ Invalid or Expired QR Code!");
-      }
-    }, 1500);
+  const student = students.find(
+    (record) =>
+      record.rollNo?.toLowerCase() === user?.rollNo?.toLowerCase() ||
+      record.email?.toLowerCase() === user?.email?.toLowerCase()
+  ) || {
+    id: user?.id || "",
+    name: user?.name || "Student",
+    rollNo: user?.rollNo || user?.loginId || "",
+    role: user?.role || "DAY_SCHOLAR",
+    routeId: "RT-01",
   };
+  const route = routes.find((record) => record.id === student.routeId);
+  const bus = buses.find((record) => record.id === route?.busId);
+  const studentHistory = attendanceHistory.filter((record) => record.rollNo === student.rollNo);
+  const today = new Date().toISOString().slice(0, 10);
+  const todayAttendance = studentHistory.find((record) => record.date === today);
+  const qrValue = createStudentQrPayload(student);
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">QR Attendance & Boarding</h1>
-        <p className="text-sm text-muted-foreground">Scan the QR code inside your university shuttle to record your daily attendance.</p>
+        <p className="text-sm text-muted-foreground">Show your personal QR code to the conductor when boarding. Your attendance will be recorded after it is scanned.</p>
       </div>
 
       {/* Today's Boarding Status Banner */}
-      <Card className={`border-2 ${todayAttendance.marked ? "border-emerald-500/40 bg-emerald-500/5" : "border-amber-500/40 bg-amber-500/5"}`}>
+      <Card className={`border-2 ${todayAttendance ? "border-emerald-500/40 bg-emerald-500/5" : "border-amber-500/40 bg-amber-500/5"}`}>
         <CardContent className="p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${todayAttendance.marked ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"}`}>
-              {todayAttendance.marked ? <CheckCircle2 className="h-6 w-6" /> : <Clock className="h-6 w-6" />}
+            <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${todayAttendance ? "bg-emerald-500 text-white" : "bg-amber-500 text-white"}`}>
+              {todayAttendance ? <CheckCircle2 className="h-6 w-6" /> : <Clock className="h-6 w-6" />}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-foreground">
-                  Today's Attendance: {todayAttendance.marked ? "Marked Present" : "Not Marked Yet"}
+                  Today's Attendance: {todayAttendance ? "Marked Present" : "Not Marked Yet"}
                 </h2>
-                <Badge variant={todayAttendance.marked ? "success" : "warning"}>
-                  {todayAttendance.marked ? "🟢 Boarded" : "🟡 Pending Scan"}
+                <Badge variant={todayAttendance ? "success" : "warning"}>
+                  {todayAttendance ? "🟢 Boarded" : "🟡 Pending Scan"}
                 </Badge>
               </div>
-              {todayAttendance.marked ? (
+              {todayAttendance ? (
                 <p className="text-xs text-muted-foreground mt-1">
                   Recorded at <span className="font-semibold text-foreground">{todayAttendance.time}</span> • Stop: {todayAttendance.stop} • Method: {todayAttendance.method}
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground mt-1">
-                  Board your assigned bus and scan the QR code displayed near the front entrance.
+                  Show your student QR code below to the conductor when boarding.
                 </p>
               )}
             </div>
           </div>
-
-          {!todayAttendance.marked && (
-            <Button onClick={() => handleSimulateScan(true)} className="w-full sm:w-auto gap-2">
-              <Camera className="h-4 w-4" /> Open Camera Scanner
-            </Button>
-          )}
         </CardContent>
       </Card>
 
-      {/* QR Code Scanner Interface */}
+      {/* Personal QR code for conductor scanning */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base font-bold flex items-center gap-2">
-            <QrCode className="h-5 w-5 text-primary" /> Shuttle QR Code Scanner
+            <QrCode className="h-5 w-5 text-primary" /> Your Student Boarding QR
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="relative mx-auto flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border p-6 sm:p-10 bg-secondary/20 text-center max-w-md overflow-hidden">
-            {isScanning ? (
-              <div className="w-full relative">
-                {/* Real Camera Feed */}
-                <video
-                  id="qr-video"
-                  className="w-full h-64 object-cover rounded-xl bg-black"
-                  autoPlay
-                  playsInline
-                  muted
-                  ref={(videoRef) => {
-                    if (videoRef && !videoRef.srcObject) {
-                      navigator.mediaDevices
-                        .getUserMedia({ video: { facingMode: "environment" } })
-                        .then((stream) => {
-                          videoRef.srcObject = stream;
-                        })
-                        .catch((err) => {
-                          console.error("Camera access denied:", err);
-                          toast.error("Camera access is required to scan QR codes.");
-                          setIsScanning(false);
-                        });
-                    }
-                  }}
-                ></video>
-                
-                {/* Scanner Overlay */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-40 h-40 border-2 border-primary rounded-lg relative">
-                    <div className="absolute top-0 left-0 w-full h-0.5 bg-primary/80 animate-scan"></div>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex flex-col items-center space-y-2">
-                  <p className="text-sm font-semibold text-foreground">Point camera at conductor's QR Code</p>
-                  <Button 
-                    variant="default" 
-                    className="w-full sm:w-auto" 
-                    onClick={() => {
-                      // Stop camera streams
-                      const video = document.getElementById("qr-video");
-                      if (video && video.srcObject) {
-                        video.srcObject.getTracks().forEach(t => t.stop());
-                      }
-                      // Simulate successful scan processing
-                      setScanResult(null);
-                      setTimeout(() => {
-                        setIsScanning(false);
-                        markAttendance({
-                          routeId: activeRoute.id,
-                          busId: activeBus.id,
-                          stop: "Kohinoor Chowk",
-                          method: "QR Scan",
-                        });
-                        setScanResult("success");
-                        toast.success("✅ Attendance Marked Successfully!");
-                      }, 500);
-                    }}
-                  >
-                    Simulate Read
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => {
-                      const video = document.getElementById("qr-video");
-                      if (video && video.srcObject) {
-                        video.srcObject.getTracks().forEach(t => t.stop());
-                      }
-                      setIsScanning(false);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            ) : scanResult === "success" || todayAttendance.marked ? (
-              <div className="py-4 space-y-3">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
-                  <CheckCircle2 className="h-8 w-8" />
-                </div>
-                <div>
-                  <p className="text-base font-bold text-emerald-600">Attendance Recorded Successfully!</p>
-                  <p className="text-xs text-muted-foreground mt-1">Verified on Route R-01 (BUS-101 • FSD-2023)</p>
-                </div>
-                <div className="pt-2">
-                  <Button variant="outline" size="sm" onClick={() => setIsScanning(true)}>
-                    Scan Another QR Code
-                  </Button>
-                </div>
-              </div>
-            ) : scanResult === "invalid" ? (
-              <div className="py-4 space-y-3">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-500/10 text-rose-600">
-                  <AlertTriangle className="h-8 w-8" />
-                </div>
-                <div>
-                  <p className="text-base font-bold text-rose-600">Invalid or Expired QR Code</p>
-                  <p className="text-xs text-muted-foreground mt-1">Make sure you are scanning the active QR code shown by the conductor.</p>
-                </div>
-                <div className="flex items-center gap-2 justify-center pt-2">
-                  <Button size="sm" onClick={() => setIsScanning(true)}>Try Again</Button>
-                  <Button variant="outline" size="sm" onClick={() => navigate("/student/report-issue")}>Report Issue</Button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4 py-4">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                  <QrCode className="h-10 w-10" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-foreground">Scan QR Code</p>
-                  <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
-                    Point your device camera at the QR code displayed by the bus conductor.
-                  </p>
-                </div>
-                <div className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
-                  <Button onClick={() => setIsScanning(true)} className="gap-2">
-                    <Camera className="h-4 w-4" /> Open Camera Scanner
-                  </Button>
-                </div>
-              </div>
-            )}
+        <CardContent className="flex flex-col items-center gap-4">
+          <div className="rounded-xl border-4 border-secondary bg-white p-3">
+            <QRCodeSVG value={qrValue} size={220} fgColor="#07274c" level="M" />
           </div>
+          <div className="text-center">
+            <p className="font-semibold text-foreground">{student.name}</p>
+            <p className="font-mono text-sm text-muted-foreground">{student.rollNo}</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {route?.shortName || "No route assigned"}{bus ? ` • ${bus.plate}` : ""}
+            </p>
+          </div>
+          <Badge variant="outline">Present this code to your conductor</Badge>
         </CardContent>
       </Card>
 
@@ -281,7 +148,7 @@ export default function Attendance() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {attendanceHistory.map((item) => (
+              {studentHistory.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell className="font-medium text-xs text-foreground">{item.date}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{item.routeId}</TableCell>
@@ -295,6 +162,13 @@ export default function Attendance() {
                   </TableCell>
                 </TableRow>
               ))}
+              {studentHistory.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                    No attendance scans recorded yet.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>

@@ -7,21 +7,26 @@ export const useStudentStore = create(
     (set, get) => ({
       students: STUDENTS,
 
-      addStudent: ({ name, rollNo, role, routeId }) => {
+      addStudent: ({ name, rollNo, role, routeId, email: suppliedEmail, contactEmail, password: suppliedPassword, phone, staffId, pickupStop, semester, feeStatus }) => {
         const formattedRollNo = rollNo.trim().toUpperCase();
-        const email = generateStudentEmail(formattedRollNo);
-        const password = generateStudentPassword(formattedRollNo);
+        const email = suppliedEmail || generateStudentEmail(formattedRollNo);
+        const password = suppliedPassword || generateStudentPassword(formattedRollNo);
 
         const student = {
           id: `STU-${String(get().students.length + 1).padStart(3, "0")}`,
           name,
           rollNo: formattedRollNo,
           email,
+          contactEmail,
           password,
           role,
           routeId,
+          phone,
+          staffId,
+          pickupStop,
+          semester,
           cnic: "—",
-          feeStatus: "Pending",
+          feeStatus: feeStatus || "Pending",
         };
         set((state) => ({ students: [...state.students, student] }));
         // Provision the login account with email, roll number, and password
@@ -40,6 +45,13 @@ export const useStudentStore = create(
       updateStudent: (id, patch) =>
         set((state) => ({
           students: state.students.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+        })),
+
+      updateStudentPassword: (rollNo, newPassword) =>
+        set((state) => ({
+          students: state.students.map((s) => 
+            s.rollNo === rollNo ? { ...s, password: newPassword } : s
+          ),
         })),
 
       deleteStudent: (id) => set((state) => ({ students: state.students.filter((s) => s.id !== id) })),

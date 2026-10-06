@@ -6,7 +6,6 @@ import {
   QrCode,
   CreditCard,
   Megaphone,
-  Bot,
   Users,
   CheckCircle2,
   AlertTriangle,
@@ -33,7 +32,7 @@ export default function Home() {
   const students = useStudentStore((s) => s.students);
   const routes = useFleetStore((s) => s.routes);
   const buses = useFleetStore((s) => s.buses);
-  const todayAttendance = useAttendanceStore((s) => s.todayAttendance);
+  const attendanceHistory = useAttendanceStore((s) => s.attendanceHistory);
   const fines = useFineStore((s) => s.fines);
 
   // Student profile lookup
@@ -47,6 +46,10 @@ export default function Home() {
     role: user?.role || "DAY_SCHOLAR",
     routeId: "RT-01",
   };
+  const today = new Date().toISOString().slice(0, 10);
+  const todayAttendance = attendanceHistory.find(
+    (record) => record.rollNo === student.rollNo && record.date === today
+  );
 
   const studentRoute = routes.find((r) => r.id === student.routeId) || routes[0];
   const assignedBus = buses.find((b) => b.id === studentRoute?.busId) || buses[0];
@@ -76,8 +79,8 @@ export default function Home() {
               <h1 className="text-xl font-bold tracking-tight text-foreground">
                 {getGreeting()}, {student.name.split(" ")[0]}! 👋
               </h1>
-              <Badge variant={student.role === "HOSTELITE" ? "accent" : "secondary"} className="text-[10px]">
-                {student.role === "HOSTELITE" ? "Hostelite" : "Day Scholar"}
+              <Badge variant={student.role === "HOSTELITE" || student.role === "FACULTY" ? "accent" : "secondary"} className="text-[10px]">
+                {student.role === "FACULTY" ? "Faculty" : student.role === "HOSTELITE" ? "Hostelite" : "Day Scholar"}
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -88,7 +91,7 @@ export default function Home() {
 
         <div className="flex items-center gap-2 sm:self-center">
           <Button variant="outline" size="sm" onClick={() => navigate("/student/attendance")}>
-            <QrCode className="h-4 w-4 mr-1.5 text-primary" /> Scan QR
+            <QrCode className="h-4 w-4 mr-1.5 text-primary" /> My QR
           </Button>
           <Button size="sm" onClick={() => navigate("/student/transport")}>
             <Bus className="h-4 w-4 mr-1.5" /> Live Map
@@ -164,8 +167,8 @@ export default function Home() {
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 group-hover:scale-105 transition-transform mb-2">
               <QrCode className="h-5 w-5" />
             </div>
-            <span className="text-xs font-semibold text-foreground">QR Attendance</span>
-            <span className="text-[10px] text-muted-foreground mt-0.5">Scan Boarding Code</span>
+            <span className="text-xs font-semibold text-foreground">My Boarding QR</span>
+            <span className="text-[10px] text-muted-foreground mt-0.5">Show to Conductor</span>
           </button>
 
           <button
@@ -232,14 +235,14 @@ export default function Home() {
             <div>
               <p className="text-xs text-muted-foreground font-medium">Today's Attendance</p>
               <p className="text-base font-bold text-foreground mt-0.5">
-                {todayAttendance.marked ? "Marked Present" : "Not Marked"}
+                {todayAttendance ? "Marked Present" : "Not Marked"}
               </p>
               <p className="text-[11px] text-muted-foreground mt-1">
-                {todayAttendance.marked ? `Boarded at ${todayAttendance.time}` : "Scan bus QR code"}
+                {todayAttendance ? `Boarded at ${todayAttendance.time}` : "Show your QR to the conductor"}
               </p>
             </div>
-            <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${todayAttendance.marked ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>
-              {todayAttendance.marked ? <CheckCircle2 className="h-5 w-5" /> : <Clock className="h-5 w-5" />}
+            <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${todayAttendance ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>
+              {todayAttendance ? <CheckCircle2 className="h-5 w-5" /> : <Clock className="h-5 w-5" />}
             </div>
           </CardContent>
         </Card>

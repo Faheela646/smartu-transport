@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Search, CheckCircle2, Mail, Key, Copy, Check, Sparkles, ShieldCheck } from "lucide-react";
+import { Plus, Search, CheckCircle2, Mail, Key, Copy, Check, Sparkles, ShieldCheck, FileImage, UserCheck, UserX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,11 +42,14 @@ import { useFineStore } from "@/store/useFineStore";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { ROLL_NO_REGEX, generateStudentEmail, generateStudentPassword } from "@/data/mockData";
 import { useFleetStore as useFleet } from "@/store/useFleetStore";
+import { useRegistrationStore } from "@/store/useRegistrationStore";
 
 export default function Students() {
   const { students, addStudent, approveFeeChallan } = useStudentStore();
   const { fines, clearFine, approveChallan } = useFineStore();
   const { routes } = useFleet();
+  const applications = useRegistrationStore((state) => state.applications);
+  const updateApplicationStatus = useRegistrationStore((state) => state.updateApplicationStatus);
 
   const [tab, setTab] = useState("ALL");
   const [query, setQuery] = useState("");
@@ -56,6 +59,7 @@ export default function Students() {
   const [formError, setFormError] = useState("");
   const [createdAccount, setCreatedAccount] = useState(null);
   const [copiedField, setCopiedField] = useState(null);
+  const pendingApplications = applications.filter((application) => application.status === "Pending");
 
   const selectedStudent = useMemo(() => {
     return students.find((s) => s.id === selectedStudentId) || null;
@@ -106,6 +110,40 @@ export default function Students() {
     toast.success(`Student registered! Email: ${result.email} | Password: ${result.password}`);
   };
 
+  const handleApplication = (application, approve) => {
+    if (!approve) {
+      updateApplicationStatus(application.id, "Rejected");
+      toast.success(`Registration application for ${application.name} rejected.`);
+      return;
+    }
+
+    if (students.some((student) =>
+      student.rollNo?.toLowerCase() === application.identifier.toLowerCase() ||
+      student.email?.toLowerCase() === application.email.toLowerCase()
+    )) {
+      toast.error("This ID or email is already assigned to an account. Reject the application or resolve the duplicate first.");
+      return;
+    }
+
+    const credentials = {
+      name: application.name,
+      rollNo: application.identifier,
+      role: application.role,
+      routeId: application.routeId,
+      email: application.email,
+      contactEmail: application.accountType === "student" ? application.email : undefined,
+      password: generateStudentPassword(application.identifier),
+      phone: application.phone,
+      staffId: application.staffId,
+      pickupStop: application.pickupStop,
+      semester: application.semester,
+      feeStatus: "Paid",
+    };
+    const result = addStudent(credentials);
+    updateApplicationStatus(application.id, "Approved");
+    toast.success(`Approved. Login: ${application.identifier} / ${result.password}`);
+  };
+
   const studentFines = selectedStudent ? fines.filter((f) => f.rollNo === selectedStudent.rollNo) : [];
 
   return (
@@ -115,10 +153,76 @@ export default function Students() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Students</h1>
           <p className="text-sm text-muted-foreground">Manage day scholars, hostelites, and student login accounts.</p>
         </div>
-        <Button onClick={() => setAddOpen(true)}>
-          <Plus className="h-4 w-4 mr-1.5" /> Add Student
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => document.getElementById("registration-applications")?.scrollIntoView({ behavior: "smooth" })}>
+            <FileImage className="mr-1.5 h-4 w-4" /> Applications ({pendingApplications.length})
+          </Button>
+          <Button onClick={() => setAddOpen(true)}>
+            <Plus className="h-4 w-4 mr-1.5" /> Add Student
+          </Button>
+        </div>
       </div>
+
+      <Card id="registration-applications">
+        <CardContent className="space-y-4 p-4">
+          <div>
+            <h2 className="font-semibold text-foreground">Transport registration applications</h2>
+            <p className="text-xs text-muted-foreground">Review applicant details and payment-slip images before approving access.</p>
+          </div>
+          {applications.length === 0 ? (
+            <p className="rounded-md bg-secondary/40 p-4 text-sm text-muted-foreground">No registration applications have been submitted.</p>
+          ) : (
+            applications.map((application) => {
+              const loginIdentifier = application.identifier;
+              const temporaryPassword = generateStudentPassword(application.identifier);
+              return (
+                <div key={application.id} className="rounded-lg border border-border p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-1 text-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-semibold">{application.name}</p>
+                        <Badge variant={application.status === "Approved" ? "success" : application.status === "Rejected" ? "destructive" : "warning"}>
+                          {application.status}
+                        </Badge>
+                        <Badge variant="outline">{application.accountType === "faculty" ? "Faculty" : application.studentType === "HOSTELITE" ? "Hostelite" : "Day Scholar"}</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {application.accountType === "faculty" ? "Staff ID" : "Roll number"}: {loginIdentifier} · {application.phone} · {application.email}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Semester: {application.semester} · Route: {routes.find((route) => route.id === application.routeId)?.shortName || application.routeId} · Pickup: {application.pickupStop}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Payment bank: {application.bank} · Ref: {application.paymentReference || "Not provided"}
+                      </p>
+                      {application.receiptDataUrl && (
+                        <a href={application.receiptDataUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-primary underline">
+                          <FileImage className="h-3.5 w-3.5" /> View {application.receiptName || "payment slip"}
+                        </a>
+                      )}
+                      {application.status === "Approved" && (
+                        <p className="pt-1 text-xs font-medium text-emerald-700">
+                          Login credentials — {loginIdentifier} / {temporaryPassword}
+                        </p>
+                      )}
+                    </div>
+                    {application.status === "Pending" && (
+                      <div className="flex shrink-0 gap-2">
+                        <Button size="sm" onClick={() => handleApplication(application, true)}>
+                          <UserCheck className="mr-1 h-4 w-4" /> Approve
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleApplication(application, false)}>
+                          <UserX className="mr-1 h-4 w-4" /> Reject
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="p-4">
@@ -128,6 +232,7 @@ export default function Students() {
                 <TabsTrigger value="ALL">All</TabsTrigger>
                 <TabsTrigger value="DAY_SCHOLAR">Day Scholar</TabsTrigger>
                 <TabsTrigger value="HOSTELITE">Hostelite</TabsTrigger>
+                <TabsTrigger value="FACULTY">Faculty</TabsTrigger>
               </TabsList>
             </Tabs>
             <div className="relative sm:w-64">
@@ -175,8 +280,8 @@ export default function Students() {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={s.role === "HOSTELITE" ? "accent" : "secondary"}>
-                        {s.role === "HOSTELITE" ? "Hostelite" : "Day Scholar"}
+                      <Badge variant={s.role === "HOSTELITE" || s.role === "FACULTY" ? "accent" : "secondary"}>
+                        {s.role === "FACULTY" ? "Faculty" : s.role === "HOSTELITE" ? "Hostelite" : "Day Scholar"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">

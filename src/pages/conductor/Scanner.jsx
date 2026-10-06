@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { Html5Qrcode } from "html5-qrcode";
 import {
@@ -15,7 +15,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useFleetStore } from "@/store/useFleetStore";
 import { useFineStore } from "@/store/useFineStore";
-import { STUDENTS } from "@/data/mockData";
+import { useStudentStore } from "@/store/useStudentStore";
+import { useAttendanceStore } from "@/store/useAttendanceStore";
+import { parseStudentQrPayload } from "@/lib/studentQr";
 import { cn } from "@/lib/utils";
 
 const SCANNER_ELEMENT_ID = "conductor-qr-reader";
@@ -38,8 +40,12 @@ function playTone(success) {
   }
 }
 
-function validateScan(qrValue, routeId, alreadyBoarded, fines) {
-  const student = STUDENTS.find((s) => qrValue.endsWith(s.rollNo));
+function validateScan(qrValue, routeId, alreadyBoarded, fines, students) {
+  const payload = parseStudentQrPayload(qrValue);
+  if (!payload) return { allowed: false, reason: "Invalid QR Code" };
+  const student = students.find(
+    (record) => record.id === payload.studentId && record.rollNo === payload.rollNo
+  );
   if (!student) return { allowed: false, reason: "Invalid QR Code" };
   if (alreadyBoarded.has(student.rollNo)) return { allowed: false, reason: "Already Scanned", student };
   if (student.routeId !== routeId) return { allowed: false, reason: "Wrong Route", student };
@@ -52,6 +58,9 @@ export default function ConductorScanner() {
   const user = useAuthStore((s) => s.user);
   const { conductors, buses, routes } = useFleetStore();
   const fines = useFineStore((s) => s.fines);
+  const students = useStudentStore((s) => s.students);
+  const attendanceHistory = useAttendanceStore((s) => s.attendanceHistory);
+  const markAttendance = useAttendanceStore((s) => s.markAttendance);
 
   const conductor = conductors.find((c) => c.id === user?.id);
   const bus = buses.find((b) => b.id === conductor?.assignedBusId);
@@ -59,8 +68,6 @@ export default function ConductorScanner() {
   const capacity = bus?.capacity ?? 50;
 
   const [scanning, setScanning] = useState(false);
-  const [boardedCount, setBoardedCount] = useState(0);
-  const [boardedSet, setBoardedSet] = useState(new Set());
   const [flash, setFlash] = useState(null); // { ok: bool, reason, name }
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [queueLength, setQueueLength] = useState(() => {
@@ -70,6 +77,15 @@ export default function ConductorScanner() {
       return 0;
     }
   });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const boardedSet = useMemo(
+    () => new Set(attendanceHistory.filter((record) => record.date === today).map((record) => record.rollNo)),
+    [attendanceHistory, today]
+  );
+  const boardedCount = attendanceHistory.filter(
+    (record) => record.date === today && record.routeId === route?.id
+  ).length;
 
   const scannerRef = useRef(null);
   const processingRef = useRef(false);
@@ -108,14 +124,26 @@ export default function ConductorScanner() {
       if (processingRef.current) return;
       processingRef.current = true;
 
-      const result = validateScan(decodedText, route?.id, boardedSet, fines);
+      const result = validateScan(decodedText, route?.id, boardedSet, fines, students);
 
       if (result.allowed) {
+        markAttendance({
+          rollNo: result.student.rollNo,
+          routeId: route.id,
+          busId: bus.id,
+          stop: route.stops?.[0]?.name || "Main Gate",
+          method: "QR Scan",
+        });
         playTone(true);
         setFlash({ ok: true, name: result.student.name });
-        setBoardedCount((c) => c + 1);
-        setBoardedSet((prev) => new Set(prev).add(result.student.rollNo));
-        if (!isOnline) queueScan({ rollNo: result.student.rollNo, time: Date.now() });
+        if (!isOnline) {
+          queueScan({
+            rollNo: result.student.rollNo,
+            routeId: route.id,
+            busId: bus.id,
+            time: Date.now(),
+          });
+        }
       } else {
         playTone(false);
         setFlash({ ok: false, reason: result.reason, name: result.student?.name });
@@ -126,7 +154,7 @@ export default function ConductorScanner() {
         processingRef.current = false;
       }, 2500);
     },
-    [route?.id, boardedSet, fines, isOnline]
+    [route, bus, boardedSet, fines, students, markAttendance, isOnline]
   );
 
   // ---- Camera lifecycle ----

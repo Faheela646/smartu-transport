@@ -4,6 +4,7 @@ import { ThemeProvider } from "@/components/shared/ThemeProvider";
 import { ProtectedRoute } from "@/components/shared/ProtectedRoute";
 
 import Login from "@/pages/auth/Login";
+import Register from "@/pages/auth/Register";
 import Unauthorized from "@/pages/auth/Unauthorized";
 
 import AdminLayout from "@/components/shared/AdminLayout";
@@ -44,6 +45,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
           <Route path="/403" element={<Unauthorized />} />
 
           <Route
@@ -71,7 +73,7 @@ function App() {
           <Route
             path="/student"
             element={
-              <ProtectedRoute roles={["DAY_SCHOLAR", "HOSTELITE"]}>
+              <ProtectedRoute roles={["DAY_SCHOLAR", "HOSTELITE", "FACULTY"]}>
                 <StudentLayout />
               </ProtectedRoute>
             }

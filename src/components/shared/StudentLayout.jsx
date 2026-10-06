@@ -62,7 +62,7 @@ export default function StudentLayout() {
           <div className="flex items-center gap-6">
             <Logo showSubtitle={false} />
             <Badge variant="accent" className="hidden sm:inline-flex text-xs">
-              Day Scholar Portal
+              {user?.role === "FACULTY" ? "Faculty Portal" : user?.role === "HOSTELITE" ? "Hostelite Portal" : "Day Scholar Portal"}
             </Badge>
           </div>
 

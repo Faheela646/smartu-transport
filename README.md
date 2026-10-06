@@ -32,13 +32,13 @@ npm run preview
 
 ## Demo Accounts
 
-There is no self-registration — all accounts are pre-provisioned, exactly as a real deployment would work.
+Existing demo accounts are pre-provisioned. New students and faculty can apply for a transport account from the login page; applications and payment-slip images are stored locally in the browser for Transport Admin approval.
 
 | Role | Login ID | Password |
 |---|---|---|
 | Admin | `admin` | `admin123` |
-| Day Scholar | `22F-3082` | `student123` |
-| Hostelite | `22F-3091` | `student123` |
+| Day Scholar | `22F-3082` | `3082@fast` |
+| Hostelite | `22F-3091` | `3091@fast` |
 | Conductor | `conductor_1` | `conductor123` |
 | Driver | `driver_1` | `driver123` |
 
@@ -47,8 +47,8 @@ Roll numbers follow the pattern `##[A-Z]{1,4}-####` (e.g. `22F-1111`, `21K-0234`
 ## Module Guide
 
 - **Admin** (`/admin`) — desktop-optimized dashboard: analytics, student CRUD with fine/fee sheet, staff CRUD with emergency reassignment, fleet CRUD with forced-replacement maintenance workflow, route/schedule builder, and a live announcement broadcaster.
-- **Student** (`/student`) — mobile-first: live map tracking with a simulated moving bus, hostelite seat booking (calendar + full/half fare), a 30-second self-refreshing QR boarding pass, a wallet for fines/challans, and a floating mock AI chatbot.
-- **Conductor** (`/conductor`) — high-contrast full-screen camera scanner using `html5-qrcode`, continuous scanning with green/red flash feedback, and an offline queueing system that syncs when connectivity returns.
+- **Student** (`/student`) — mobile-first: live map tracking with a simulated moving bus, hostelite seat booking (calendar + full/half fare), a personal QR boarding pass, a wallet for fines/challans, and a floating mock AI chatbot.
+- **Conductor** (`/conductor`) — high-contrast full-screen camera scanner using `html5-qrcode`, continuous scanning with green/red flash feedback, student attendance recording, and an offline queueing system.
 - **Driver** (`/driver`) — dark-mode-by-default cockpit view: `watchPosition` GPS broadcasting, Screen Wake Lock, and one-tap emergency status broadcasts (Traffic Delay / Breakdown / On Schedule).
 
 ## Notes

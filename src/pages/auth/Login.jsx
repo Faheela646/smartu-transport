@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Bus, Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -125,8 +125,11 @@ export default function Login() {
           </CardContent>
         </Card>
 
-        <p className="mt-6 text-center text-xs text-white/60">
-          Accounts are pre-provisioned by the Transport Admin. Students cannot self-register.
+        <p className="mt-6 text-center text-sm text-white/80">
+          New to campus transport?{" "}
+          <Link to="/register" className="font-semibold text-white underline underline-offset-4 hover:text-accent">
+            Register an account
+          </Link>
         </p>
 
         <div className="mt-4 rounded-lg border border-white/15 bg-white/5 p-3 text-[11px] leading-relaxed text-white/70">

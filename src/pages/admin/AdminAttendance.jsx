@@ -2,6 +2,9 @@ import { useState } from "react";
 import { UserCheck, Search, Calendar, MapPin, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useAttendanceStore } from "@/store/useAttendanceStore";
+import { useStudentStore } from "@/store/useStudentStore";
+import { useFleetStore } from "@/store/useFleetStore";
 
 const MOCK_ATTENDANCE = [
   { id: 1, name: "Ahmed Raza", rollNo: "22F-3082", route: "RT-01", stop: "D-Ground Chowk", time: "7:14 AM", date: "Today", status: "Boarded", type: "NFC Tap" },
@@ -12,8 +15,31 @@ const MOCK_ATTENDANCE = [
 
 export default function AdminAttendance() {
   const [search, setSearch] = useState("");
+  const attendanceHistory = useAttendanceStore((state) => state.attendanceHistory);
+  const students = useStudentStore((state) => state.students);
+  const routes = useFleetStore((state) => state.routes);
+  const today = new Date().toISOString().slice(0, 10);
+  const scannedAttendance = attendanceHistory
+    .filter((record) => record.rollNo)
+    .map((record) => ({
+      id: record.id,
+      name: students.find((student) => student.rollNo === record.rollNo)?.name || record.rollNo,
+      rollNo: record.rollNo,
+      route: routes.find((route) => route.id === record.routeId)?.shortName || record.routeId,
+      stop: record.stop,
+      time: record.time,
+      date: record.date === today ? "Today" : record.date,
+      type: record.method,
+    }));
+  const scannedToday = new Set(
+    scannedAttendance.filter((record) => record.date === "Today").map((record) => record.rollNo)
+  );
+  const attendanceLogs = [
+    ...scannedAttendance,
+    ...MOCK_ATTENDANCE.filter((record) => !scannedToday.has(record.rollNo)),
+  ];
 
-  const filtered = MOCK_ATTENDANCE.filter(a => 
+  const filtered = attendanceLogs.filter(a =>
     a.name.toLowerCase().includes(search.toLowerCase()) || 
     a.rollNo.toLowerCase().includes(search.toLowerCase()) ||
     a.route.toLowerCase().includes(search.toLowerCase())
@@ -87,6 +113,13 @@ export default function AdminAttendance() {
                   </td>
                 </tr>
               ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                    No attendance records match your search.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

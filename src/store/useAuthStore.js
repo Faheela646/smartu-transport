@@ -33,7 +33,7 @@ export const useAuthStore = create(
           name: account.name,
           role: account.role,
           loginId: account.loginId,
-          rollNo: account.rollNo || (/^(DAY_SCHOLAR|HOSTELITE)$/.test(account.role) ? account.loginId : undefined),
+          rollNo: account.rollNo || (/^(DAY_SCHOLAR|HOSTELITE|FACULTY)$/.test(account.role) ? account.loginId : undefined),
           email: account.email,
           token,
         };

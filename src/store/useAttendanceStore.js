@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 export const INITIAL_ATTENDANCE_HISTORY = [
   { id: "ATT-101", date: "2026-09-15", routeId: "RT-01", busId: "BUS-101", time: "07:42 AM", stop: "Kohinoor Chowk", method: "QR Scan", status: "Present" },
@@ -8,7 +9,8 @@ export const INITIAL_ATTENDANCE_HISTORY = [
   { id: "ATT-105", date: "2026-09-10", routeId: "RT-01", busId: "BUS-101", time: "07:41 AM", stop: "Kohinoor Chowk", method: "QR Scan", status: "Present" },
 ];
 
-export const useAttendanceStore = create((set, get) => ({
+export const useAttendanceStore = create(
+  persist((set, get) => ({
   attendanceHistory: INITIAL_ATTENDANCE_HISTORY,
   rfidCard: {
     cardNumber: "RFID-8812-9041",
@@ -25,13 +27,18 @@ export const useAttendanceStore = create((set, get) => ({
     method: "QR Scan",
   },
 
-  markAttendance: ({ routeId, busId, stop, method = "QR Scan" }) => {
+  markAttendance: ({ rollNo, routeId, busId, stop, method = "QR Scan" }) => {
     const now = new Date();
     const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     const dateStr = now.toISOString().slice(0, 10);
+    const existingRecord = get().attendanceHistory.find(
+      (record) => record.rollNo === rollNo && record.date === dateStr
+    );
+    if (existingRecord) return existingRecord;
 
     const newRecord = {
       id: `ATT-${Date.now()}`,
+      rollNo,
       date: dateStr,
       routeId,
       busId,
@@ -68,4 +75,5 @@ export const useAttendanceStore = create((set, get) => ({
       },
     });
   },
-}));
+}), { name: "smartu-attendance" })
+);

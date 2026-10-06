@@ -2,12 +2,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
-  User,
   CreditCard,
   KeyRound,
   LogOut,
-  Bell,
-  Moon,
   Shield,
   Bus,
   MapPin,
@@ -28,10 +25,12 @@ import { useStudentStore } from "@/store/useStudentStore";
 import { useFleetStore } from "@/store/useFleetStore";
 import { initials } from "@/lib/utils";
 import { generateStudentEmail, generateStudentPassword } from "@/data/mockData";
+import { QRCodeSVG } from "qrcode.react";
+import { createStudentQrPayload } from "@/lib/studentQr";
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user, logout, changePassword } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const students = useStudentStore((s) => s.students);
   const routes = useFleetStore((s) => s.routes);
   const { theme, setTheme } = useTheme();
@@ -52,7 +51,9 @@ export default function Profile() {
   const studentEmail = student.email || generateStudentEmail(student.rollNo);
   const studentPassword = student.password || generateStudentPassword(student.rollNo);
   const rfidNumber = `RFID-${student.rollNo.replace(/[^A-Za-z0-9]/g, "")}`;
+  const qrValue = createStudentQrPayload(student);
 
+  const { updateStudentPassword } = useStudentStore();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [currentPass, setCurrentPass] = useState("");
   const [newPass, setNewPass] = useState("");
@@ -60,11 +61,23 @@ export default function Profile() {
 
   const handleChangePassword = (e) => {
     e.preventDefault();
+    if (currentPass.trim() !== studentPassword) {
+      toast.error("Incorrect current password.");
+      return;
+    }
     if (newPass !== confirmPass) {
       toast.error("New password and confirmation do not match.");
       return;
     }
-    changePassword();
+    if (newPass.trim().length < 8) {
+      toast.error("New password must be at least 8 characters.");
+      return;
+    }
+    if (newPass.trim() === studentPassword) {
+      toast.error("Choose a password different from your current password.");
+      return;
+    }
+    updateStudentPassword(student.rollNo, newPass.trim());
     toast.success("Password updated successfully.");
     setCurrentPass("");
     setNewPass("");
@@ -90,12 +103,12 @@ export default function Profile() {
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold text-foreground">{student.name}</h2>
-                <Badge variant={student.role === "HOSTELITE" ? "accent" : "secondary"}>
-                  {student.role === "HOSTELITE" ? "Hostelite" : "Day Scholar"}
+                <Badge variant={student.role === "HOSTELITE" || student.role === "FACULTY" ? "accent" : "secondary"}>
+                  {student.role === "FACULTY" ? "Faculty" : student.role === "HOSTELITE" ? "Hostelite" : "Day Scholar"}
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Roll Number: <span className="font-mono font-medium text-foreground">{student.rollNo}</span>
+                {student.role === "FACULTY" ? "Staff ID" : "Roll Number"}: <span className="font-mono font-medium text-foreground">{student.rollNo}</span>
               </p>
               <p className="text-xs text-muted-foreground">FAST NUCES Chiniot-Faisalabad Campus</p>
             </div>
@@ -140,6 +153,18 @@ export default function Profile() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="flex flex-col items-center gap-4 rounded-xl border border-border bg-background/80 p-4 sm:flex-row">
+            <div className="rounded-lg border-2 border-secondary bg-white p-2">
+              <QRCodeSVG value={qrValue} size={144} fgColor="#07274c" level="M" />
+            </div>
+            <div className="text-center sm:text-left">
+              <p className="font-semibold text-foreground">Your personal boarding QR</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Show this code to the conductor. Your attendance is marked when it is scanned.
+              </p>
+              <p className="mt-2 font-mono text-xs text-primary">{student.rollNo}</p>
+            </div>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             <div className="rounded-xl border border-border p-3.5 bg-background/80 space-y-1">
               <span className="text-muted-foreground">Assigned Route</span>
@@ -211,7 +236,7 @@ export default function Profile() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>New Password</Label>
-                <Input type="password" required value={newPass} onChange={(e) => setNewPass(e.target.value)} />
+                <Input type="password" required minLength={8} value={newPass} onChange={(e) => setNewPass(e.target.value)} />
               </div>
               <div className="space-y-1.5">
                 <Label>Confirm New Password</Label>

@@ -255,16 +255,11 @@ export function findAccount(loginId, password) {
     const expectedPass = cand.password || generateStudentPassword(cand.rollNo || cand.loginId);
     return (
       expectedPass === cleanPass ||
-      expectedPass.toLowerCase() === cleanPass.toLowerCase() ||
-      (cand.role !== "ADMIN" && (cleanPass === "student123" || cleanPass === "driver123" || cleanPass === "conductor123"))
+      expectedPass.toLowerCase() === cleanPass.toLowerCase()
     );
   };
 
-  // 1. Search in pre-provisioned MOCK_ACCOUNTS
-  let account = MOCK_ACCOUNTS.find((a) => isUserMatch(a) && isPassMatch(a));
-  if (account) return account;
-
-  // 2. Search dynamically registered students in localStorage
+  // 1. Search dynamically registered/updated students in localStorage FIRST
   try {
     let studentList = [];
     const raw = typeof window !== "undefined" ? localStorage.getItem("smartu-students") : null;
@@ -275,21 +270,26 @@ export function findAccount(loginId, password) {
       }
     }
 
-    const sMatch = studentList.find((s) => isUserMatch(s) && isPassMatch(s));
-    if (sMatch) {
+    const studentAccount = studentList.find(isUserMatch);
+    if (studentAccount && !isPassMatch(studentAccount)) return null;
+    if (studentAccount) {
       return {
-        loginId: sMatch.rollNo,
-        rollNo: sMatch.rollNo,
-        email: sMatch.email || generateStudentEmail(sMatch.rollNo),
-        password: sMatch.password || generateStudentPassword(sMatch.rollNo),
-        role: sMatch.role || "DAY_SCHOLAR",
-        name: sMatch.name,
-        refId: sMatch.id,
+        loginId: studentAccount.rollNo,
+        rollNo: studentAccount.rollNo,
+        email: studentAccount.email,
+        password: studentAccount.password,
+        role: studentAccount.role,
+        name: studentAccount.name,
+        refId: studentAccount.id,
       };
     }
   } catch (e) {
-    console.error("Error finding account:", e);
+    console.error(e);
   }
+
+  // 2. Fallback to Search in pre-provisioned MOCK_ACCOUNTS
+  let account = MOCK_ACCOUNTS.find((a) => isUserMatch(a) && isPassMatch(a));
+  if (account) return account;
 
   return null;
 }
@@ -298,6 +298,7 @@ export const ROLE_HOME = {
   ADMIN: "/admin",
   DAY_SCHOLAR: "/student",
   HOSTELITE: "/student",
+  FACULTY: "/student",
   CONDUCTOR: "/conductor",
   DRIVER: "/driver",
 };
