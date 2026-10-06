@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Search, CheckCircle2, Mail, Key, Copy, Check, Sparkles, ShieldCheck, FileImage, UserCheck, UserX } from "lucide-react";
+import { Plus, Search, CheckCircle2, Mail, Key, Copy, Check, Sparkles, ShieldCheck, Users, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,28 +38,28 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { useStudentStore } from "@/store/useStudentStore";
-import { useFineStore } from "@/store/useFineStore";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { useTransportWorkflowStore } from "@/store/useTransportWorkflowStore";
 import { ROLL_NO_REGEX, generateStudentEmail, generateStudentPassword } from "@/data/mockData";
 import { useFleetStore as useFleet } from "@/store/useFleetStore";
-import { useRegistrationStore } from "@/store/useRegistrationStore";
 
 export default function Students() {
-  const { students, addStudent, approveFeeChallan } = useStudentStore();
-  const { fines, clearFine, approveChallan } = useFineStore();
+  const { students, addStudent, bulkCreateStudents, updateStudent, deleteStudent } = useStudentStore();
+  const semesterPayments = useTransportWorkflowStore((state) => state.semesterPayments);
   const { routes } = useFleet();
-  const applications = useRegistrationStore((state) => state.applications);
-  const updateApplicationStatus = useRegistrationStore((state) => state.updateApplicationStatus);
 
   const [tab, setTab] = useState("ALL");
   const [query, setQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState(null);
-  const [form, setForm] = useState({ name: "", rollNo: "", role: "DAY_SCHOLAR", routeId: routes[0]?.id || "" });
+  const [form, setForm] = useState({ name: "", rollNo: "", role: "DAY_SCHOLAR" });
   const [formError, setFormError] = useState("");
   const [createdAccount, setCreatedAccount] = useState(null);
   const [copiedField, setCopiedField] = useState(null);
-  const pendingApplications = applications.filter((application) => application.status === "Pending");
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkCsv, setBulkCsv] = useState("");
+  const [bulkAccounts, setBulkAccounts] = useState([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+  const [bulkRouteId, setBulkRouteId] = useState("");
 
   const selectedStudent = useMemo(() => {
     return students.find((s) => s.id === selectedStudentId) || null;
@@ -97,7 +97,7 @@ export default function Students() {
       setFormError("A student with this roll number already exists.");
       return;
     }
-    const result = addStudent(form);
+    const result = addStudent({ ...form, routeId: null, accountStatus: "N/A", seatNo: null });
     setAddOpen(false);
     setCreatedAccount({
       name: form.name,
@@ -105,124 +105,112 @@ export default function Students() {
       email: result.email,
       password: result.password,
     });
-    setForm({ name: "", rollNo: "", role: "DAY_SCHOLAR", routeId: routes[0]?.id || "" });
+    setForm({ name: "", rollNo: "", role: "DAY_SCHOLAR" });
     setFormError("");
     toast.success(`Student registered! Email: ${result.email} | Password: ${result.password}`);
   };
 
-  const handleApplication = (application, approve) => {
-    if (!approve) {
-      updateApplicationStatus(application.id, "Rejected");
-      toast.success(`Registration application for ${application.name} rejected.`);
+  const handleBulkCreate = (event) => {
+    event.preventDefault();
+    const rows = bulkCsv.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    if (rows.length === 0) {
+      toast.error("Paste at least one user row.");
       return;
     }
-
-    if (students.some((student) =>
-      student.rollNo?.toLowerCase() === application.identifier.toLowerCase() ||
-      student.email?.toLowerCase() === application.email.toLowerCase()
-    )) {
-      toast.error("This ID or email is already assigned to an account. Reject the application or resolve the duplicate first.");
+    let parsed;
+    try {
+      parsed = rows.map((line, index) => {
+        const [name, identifier, email, rawUserType, rawCategory] = line.split(",").map((value) => value.trim());
+        const userType = rawUserType?.toLowerCase();
+        const category = rawCategory?.toUpperCase();
+        if (!name || !identifier || !email || !["student", "faculty"].includes(userType)) {
+          throw new Error(`Row ${index + 1}: provide name, ID, email and user_type (student/faculty).`);
+        }
+        if (userType === "student" && !["DAY_SCHOLAR", "HOSTELITE"].includes(category)) {
+          throw new Error(`Row ${index + 1}: student category must be DAY_SCHOLAR or HOSTELITE.`);
+        }
+        const normalizedId = identifier.toUpperCase();
+        const duplicate = students.some((student) =>
+          student.rollNo?.toUpperCase() === normalizedId || student.email?.toLowerCase() === email.toLowerCase()
+        );
+        if (duplicate) throw new Error(`Row ${index + 1}: ID or email already exists.`);
+        const role = userType === "faculty" ? "FACULTY" : category;
+        return {
+          name,
+          rollNo: normalizedId,
+          email: email.toLowerCase(),
+          userType,
+          role,
+          routeId: null,
+          password: generateStudentPassword(normalizedId),
+          accountStatus: "N/A",
+          seatNo: null,
+        };
+      });
+    } catch (error) {
+      toast.error(error.message || "Unable to read the pasted account list.");
       return;
     }
-
-    const credentials = {
-      name: application.name,
-      rollNo: application.identifier,
-      role: application.role,
-      routeId: application.routeId,
-      email: application.email,
-      contactEmail: application.accountType === "student" ? application.email : undefined,
-      password: generateStudentPassword(application.identifier),
-      phone: application.phone,
-      staffId: application.staffId,
-      pickupStop: application.pickupStop,
-      semester: application.semester,
-      feeStatus: "Paid",
-    };
-    const result = addStudent(credentials);
-    updateApplicationStatus(application.id, "Approved");
-    toast.success(`Approved. Login: ${application.identifier} / ${result.password}`);
+    const identifiers = new Set(parsed.map((record) => record.rollNo));
+    const emails = new Set(parsed.map((record) => record.email));
+    if (identifiers.size !== parsed.length || emails.size !== parsed.length) {
+      toast.error("The pasted list contains duplicate IDs or email addresses.");
+      return;
+    }
+    const created = bulkCreateStudents(parsed).map(({ student, password }) => ({
+      name: student.name, identifier: student.rollNo, email: student.email, password,
+    }));
+    setBulkAccounts(created);
+    console.info("Development temporary account credentials:", created);
+    toast.success(`${created.length} accounts created with N/A status. Temporary credentials printed to the development console.`);
+    setBulkCsv("");
+    setBulkOpen(false);
   };
 
-  const studentFines = selectedStudent ? fines.filter((f) => f.rollNo === selectedStudent.rollNo) : [];
+  const toggleStudentSelection = (id) => setSelectedStudentIds((current) =>
+    current.includes(id) ? current.filter((selectedId) => selectedId !== id) : [...current, id]
+  );
+  const filteredIds = filtered.map((student) => student.id);
+  const allFilteredSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedStudentIds.includes(id));
+
+  const updateSelectedRoutes = () => {
+    if (!bulkRouteId || selectedStudentIds.length === 0) {
+      toast.error("Select a route and at least one account.");
+      return;
+    }
+    selectedStudentIds.forEach((id) => updateStudent(id, { routeId: bulkRouteId, pickupStop: null }));
+    toast.success(`Updated the route for ${selectedStudentIds.length} account(s).`);
+    setSelectedStudentIds([]);
+    setBulkRouteId("");
+  };
+
+  const deleteSelectedStudents = () => {
+    if (!window.confirm(`Permanently remove ${selectedStudentIds.length} selected account(s) from this browser demo?`)) return;
+    selectedStudentIds.forEach(deleteStudent);
+    toast.success(`${selectedStudentIds.length} account(s) removed.`);
+    setSelectedStudentIds([]);
+  };
+
+  const studentApplications = selectedStudent
+    ? semesterPayments.filter((payment) => payment.userId === selectedStudent.id)
+    : [];
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Students</h1>
-          <p className="text-sm text-muted-foreground">Manage day scholars, hostelites, and student login accounts.</p>
+          <p className="text-sm text-muted-foreground">Provision user accounts, track semester status and assign seats.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => document.getElementById("registration-applications")?.scrollIntoView({ behavior: "smooth" })}>
-            <FileImage className="mr-1.5 h-4 w-4" /> Applications ({pendingApplications.length})
+          <Button variant="outline" onClick={() => setBulkOpen(true)}>
+            <Users className="mr-1.5 h-4 w-4" /> Bulk create
           </Button>
           <Button onClick={() => setAddOpen(true)}>
             <Plus className="h-4 w-4 mr-1.5" /> Add Student
           </Button>
         </div>
       </div>
-
-      <Card id="registration-applications">
-        <CardContent className="space-y-4 p-4">
-          <div>
-            <h2 className="font-semibold text-foreground">Transport registration applications</h2>
-            <p className="text-xs text-muted-foreground">Review applicant details and payment-slip images before approving access.</p>
-          </div>
-          {applications.length === 0 ? (
-            <p className="rounded-md bg-secondary/40 p-4 text-sm text-muted-foreground">No registration applications have been submitted.</p>
-          ) : (
-            applications.map((application) => {
-              const loginIdentifier = application.identifier;
-              const temporaryPassword = generateStudentPassword(application.identifier);
-              return (
-                <div key={application.id} className="rounded-lg border border-border p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="space-y-1 text-sm">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold">{application.name}</p>
-                        <Badge variant={application.status === "Approved" ? "success" : application.status === "Rejected" ? "destructive" : "warning"}>
-                          {application.status}
-                        </Badge>
-                        <Badge variant="outline">{application.accountType === "faculty" ? "Faculty" : application.studentType === "HOSTELITE" ? "Hostelite" : "Day Scholar"}</Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {application.accountType === "faculty" ? "Staff ID" : "Roll number"}: {loginIdentifier} · {application.phone} · {application.email}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Semester: {application.semester} · Route: {routes.find((route) => route.id === application.routeId)?.shortName || application.routeId} · Pickup: {application.pickupStop}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Payment bank: {application.bank} · Ref: {application.paymentReference || "Not provided"}
-                      </p>
-                      {application.receiptDataUrl && (
-                        <a href={application.receiptDataUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-primary underline">
-                          <FileImage className="h-3.5 w-3.5" /> View {application.receiptName || "payment slip"}
-                        </a>
-                      )}
-                      {application.status === "Approved" && (
-                        <p className="pt-1 text-xs font-medium text-emerald-700">
-                          Login credentials — {loginIdentifier} / {temporaryPassword}
-                        </p>
-                      )}
-                    </div>
-                    {application.status === "Pending" && (
-                      <div className="flex shrink-0 gap-2">
-                        <Button size="sm" onClick={() => handleApplication(application, true)}>
-                          <UserCheck className="mr-1 h-4 w-4" /> Approve
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => handleApplication(application, false)}>
-                          <UserX className="mr-1 h-4 w-4" /> Reject
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </CardContent>
-      </Card>
 
       <Card>
         <CardContent className="p-4">
@@ -246,16 +234,40 @@ export default function Students() {
             </div>
           </div>
 
+          {selectedStudentIds.length > 0 && (
+            <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-border bg-secondary/30 p-3">
+              <span className="mr-2 text-sm font-medium">{selectedStudentIds.length} selected</span>
+              <select aria-label="Set route for selected accounts" className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={bulkRouteId} onChange={(event) => setBulkRouteId(event.target.value)}>
+                <option value="">Set route…</option>
+                {routes.map((route) => <option key={route.id} value={route.id}>{route.shortName || route.name}</option>)}
+              </select>
+              <Button variant="outline" size="sm" onClick={updateSelectedRoutes}>Update route</Button>
+              <Button variant="destructive" size="sm" onClick={deleteSelectedStudents}><Trash2 className="mr-1 h-4 w-4" />Delete selected</Button>
+            </div>
+          )}
+
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>
+                  <input
+                    type="checkbox"
+                    aria-label="Select all filtered users"
+                    checked={allFilteredSelected}
+                    onChange={() => setSelectedStudentIds((current) => allFilteredSelected
+                      ? current.filter((id) => !filteredIds.includes(id))
+                      : [...new Set([...current, ...filteredIds])])}
+                  />
+                </TableHead>
                 <TableHead>Student</TableHead>
                 <TableHead>Roll No.</TableHead>
                 <TableHead>Allocated Email</TableHead>
                 <TableHead>Password</TableHead>
-                <TableHead>Type</TableHead>
+                <TableHead>User type</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Seat</TableHead>
                 <TableHead>Route</TableHead>
-                <TableHead>Fee Status</TableHead>
+                <TableHead>Latest application</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -263,8 +275,12 @@ export default function Students() {
               {filtered.map((s) => {
                 const sEmail = s.email || generateStudentEmail(s.rollNo);
                 const sPassword = s.password || generateStudentPassword(s.rollNo);
+                const latestApplication = semesterPayments.find((payment) => payment.userId === s.id);
                 return (
                   <TableRow key={s.id}>
+                    <TableCell>
+                      <input type="checkbox" aria-label={`Select ${s.name}`} checked={selectedStudentIds.includes(s.id)} onChange={() => toggleStudentSelection(s.id)} />
+                    </TableCell>
                     <TableCell className="font-medium text-foreground">{s.name}</TableCell>
                     <TableCell className="font-mono text-xs font-semibold text-primary">{s.rollNo}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">
@@ -280,27 +296,29 @@ export default function Students() {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={s.role === "HOSTELITE" || s.role === "FACULTY" ? "accent" : "secondary"}>
-                        {s.role === "FACULTY" ? "Faculty" : s.role === "HOSTELITE" ? "Hostelite" : "Day Scholar"}
+                      <Badge variant={s.userType === "faculty" || s.role === "HOSTELITE" ? "accent" : "secondary"}>
+                        {s.userType === "faculty" ? "Faculty" : s.role === "HOSTELITE" ? "Hostelite" : "Day Scholar"}
                       </Badge>
                     </TableCell>
+                    <TableCell><Badge variant={s.accountStatus === "Approved" ? "success" : s.accountStatus === "Pending" ? "warning" : "secondary"}>{s.accountStatus || "N/A"}</Badge></TableCell>
+                    <TableCell className="text-xs">{s.seatNo === 0 ? "Standing" : s.seatNo ?? "Unassigned"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {routes.find((r) => r.id === s.routeId)?.shortName || "—"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={s.feeStatus === "Paid" ? "success" : "warning"}>{s.feeStatus}</Badge>
+                      <Badge variant={latestApplication ? (latestApplication.status === "Approved" ? "success" : latestApplication.status === "Rejected" ? "destructive" : "warning") : "secondary"}>
+                        {latestApplication?.status || "Not applied"}
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="outline" size="sm" onClick={() => setSelectedStudentId(s.id)}>
-                        Details & Fines
-                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setSelectedStudentId(s.id)}>Account details</Button>
                     </TableCell>
                   </TableRow>
                 );
               })}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={11} className="py-8 text-center text-sm text-muted-foreground">
                     No students match your search.
                   </TableCell>
                 </TableRow>
@@ -309,6 +327,37 @@ export default function Students() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Bulk create accounts</DialogTitle>
+            <DialogDescription>Paste CSV rows in this order: name, ID, email, user_type, student_category. Routes and pickup stops are selected by the user when they apply. Leave the faculty category blank.</DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={handleBulkCreate}>
+            <div className="rounded-md bg-secondary/50 p-3 font-mono text-xs">
+              Ahmed Raza,22F-7001,ahmed@nu.edu.pk,student,DAY_SCHOLAR<br />
+              Sana Ali,EMP-12,sana@nu.edu.pk,faculty,
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="bulk-users">Account rows (no header)</Label>
+              <textarea id="bulk-users" className="min-h-40 w-full rounded-md border border-input bg-background p-3 font-mono text-xs" value={bulkCsv} onChange={(event) => setBulkCsv(event.target.value)} placeholder="name,ID,email,student,DAY_SCHOLAR" />
+            </div>
+            <p className="text-xs text-muted-foreground">Accounts are created with N/A status and an initial ID-based password. This UI does not send email; credentials are displayed after creation and printed to the dev console.</p>
+            <DialogFooter><Button type="submit">Create accounts</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkAccounts.length > 0} onOpenChange={(open) => !open && setBulkAccounts([])}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader><DialogTitle>Temporary credentials</DialogTitle><DialogDescription>Share these with users through the Transport Office. Every account starts with N/A status.</DialogDescription></DialogHeader>
+          <div className="max-h-80 space-y-2 overflow-y-auto">
+            {bulkAccounts.map((account) => <div key={account.identifier} className="grid gap-1 rounded-md border border-border p-3 text-xs sm:grid-cols-4"><strong>{account.name}</strong><span>{account.identifier}</span><span>{account.email}</span><code>{account.password}</code></div>)}
+          </div>
+          <DialogFooter><Button onClick={() => setBulkAccounts([])}>Done</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Student modal */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
@@ -370,28 +419,15 @@ export default function Students() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Role</Label>
-                <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="DAY_SCHOLAR">Day Scholar</SelectItem>
-                    <SelectItem value="HOSTELITE">Hostelite</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Route</Label>
-                <Select value={form.routeId} onValueChange={(v) => setForm({ ...form, routeId: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {routes.map((r) => (
-                      <SelectItem key={r.id} value={r.id}>{r.shortName}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-1.5">
+              <Label>Student category</Label>
+              <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DAY_SCHOLAR">Day Scholar</SelectItem>
+                  <SelectItem value="HOSTELITE">Hostelite</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             {formError && <p className="text-sm text-destructive">{formError}</p>}
             <DialogFooter>
@@ -412,7 +448,7 @@ export default function Students() {
               Student Account Created Successfully!
             </DialogTitle>
             <DialogDescription>
-              Account has been registered and is ready for login. Share these credentials with the student.
+              Account created with N/A status. Share these temporary credentials; the user must apply for semester transport before approval.
             </DialogDescription>
           </DialogHeader>
           {createdAccount && (
@@ -508,74 +544,25 @@ export default function Students() {
               </CardContent>
             </Card>
 
-            {/* Monthly Transport Fee Challan Section */}
             <Card>
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">Monthly Transport Fee</p>
-                    <p className="text-xs text-muted-foreground">Semester Route Subscription</p>
-                  </div>
-                  <Badge variant={selectedStudent?.feeStatus === "Paid" ? "success" : "warning"}>
-                    {selectedStudent?.feeStatus}
-                  </Badge>
+              <CardContent className="space-y-3 p-4">
+                <div>
+                  <p className="text-sm font-semibold">Semester applications</p>
+                  <p className="text-xs text-muted-foreground">Payment and seat decisions are managed in Transport Approvals.</p>
                 </div>
-                {selectedStudent?.feeStatus === "Pending" && (
-                  <Button
-                    size="sm"
-                    className="w-full"
-                    onClick={() => {
-                      approveFeeChallan(selectedStudent.id);
-                      toast.success(`Approve Uploaded Fee Challan for ${selectedStudent.name}.`);
-                    }}
-                  >
-                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Approve Uploaded Fee Challan
-                  </Button>
-                )}
+                {studentApplications.length === 0 && <p className="text-sm text-muted-foreground">No semester application submitted.</p>}
+                {studentApplications.map((payment) => (
+                  <div key={payment.id} className="space-y-1 rounded-md border border-border p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium">{payment.semester}</span>
+                      <Badge variant={payment.status === "Approved" ? "success" : payment.status === "Rejected" ? "destructive" : "warning"}>{payment.status}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{payment.routeId} · {payment.stopId} · Rs. {Number(payment.amount).toLocaleString()}</p>
+                    {payment.evidenceDataUrl && <a className="text-xs font-medium text-primary underline" href={payment.evidenceDataUrl} target="_blank" rel="noreferrer">View payment evidence</a>}
+                  </div>
+                ))}
               </CardContent>
             </Card>
-
-            <div>
-              <p className="mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fine & Penalty Records</p>
-              {studentFines.length === 0 && (
-                <p className="text-sm text-muted-foreground">No fines on record for this student.</p>
-              )}
-              <div className="space-y-3">
-                {studentFines.map((f) => (
-                  <Card key={f.id}>
-                    <CardContent className="flex items-center justify-between gap-3 p-4">
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{f.reason}</p>
-                        <p className="text-xs text-muted-foreground">{formatDate(f.date)} · {formatCurrency(f.amount)}</p>
-                        <Badge
-                          className="mt-1.5"
-                          variant={f.status === "Cleared" ? "success" : f.status === "Pending Approval" ? "warning" : "destructive"}
-                        >
-                          {f.status}
-                        </Badge>
-                      </div>
-                      {f.status !== "Cleared" && (
-                        <Button
-                          size="sm"
-                          variant={f.status === "Pending Approval" ? "default" : "outline"}
-                          onClick={() => {
-                            if (f.status === "Pending Approval") {
-                              approveChallan(f.id);
-                            } else {
-                              clearFine(f.id);
-                            }
-                            toast.success(f.status === "Pending Approval" ? "Challan approved." : "Fine cleared.");
-                          }}
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                          {f.status === "Pending Approval" ? "Approve Challan" : "Clear Fine"}
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
           </div>
         </SheetContent>
       </Sheet>

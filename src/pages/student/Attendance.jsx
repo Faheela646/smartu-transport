@@ -1,4 +1,5 @@
 import { QRCodeSVG } from "qrcode.react";
+import { toast } from "sonner";
 import {
   QrCode,
   CheckCircle2,
@@ -22,14 +23,16 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { useStudentStore } from "@/store/useStudentStore";
 import { useFleetStore } from "@/store/useFleetStore";
 import { createStudentQrPayload } from "@/lib/studentQr";
+import { Button } from "@/components/ui/button";
 
 export default function Attendance() {
   const user = useAuthStore((state) => state.user);
   const students = useStudentStore((state) => state.students);
-  const { attendanceHistory, rfidCard } = useAttendanceStore();
+  const { attendanceHistory, rfidCard, markAttendance } = useAttendanceStore();
   const { routes, buses } = useFleetStore();
   const student = students.find(
     (record) =>
+      record.id === user?.id ||
       record.rollNo?.toLowerCase() === user?.rollNo?.toLowerCase() ||
       record.email?.toLowerCase() === user?.email?.toLowerCase()
   ) || {
@@ -37,7 +40,7 @@ export default function Attendance() {
     name: user?.name || "Student",
     rollNo: user?.rollNo || user?.loginId || "",
     role: user?.role || "DAY_SCHOLAR",
-    routeId: "RT-01",
+    routeId: null,
   };
   const route = routes.find((record) => record.id === student.routeId);
   const bus = buses.find((record) => record.id === route?.busId);
@@ -45,6 +48,25 @@ export default function Attendance() {
   const today = new Date().toISOString().slice(0, 10);
   const todayAttendance = studentHistory.find((record) => record.date === today);
   const qrValue = createStudentQrPayload(student);
+  const markPresent = () => {
+    if (student.accountStatus !== "Approved") {
+      toast.error("Your account must be approved before attendance can be recorded.");
+      return;
+    }
+    if (todayAttendance) {
+      toast.info("Your presence is already recorded for today.");
+      return;
+    }
+    const record = markAttendance({
+      userId: student.id,
+      rollNo: student.rollNo,
+      routeId: student.routeId,
+      busId: bus?.id,
+      stop: student.pickupStop || route?.stops?.[0]?.name,
+      method: "Self Mark",
+    });
+    toast.success(record.date === today ? "Attendance marked for today." : "Attendance already exists for today.");
+  };
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -82,6 +104,17 @@ export default function Attendance() {
           </div>
         </CardContent>
       </Card>
+
+      {!todayAttendance && (
+        <div className="flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">
+            {student.accountStatus === "Approved"
+              ? "You can mark your own presence once per day or present your QR code to the conductor."
+              : "Attendance can be recorded after the Transport Office approves your account."}
+          </p>
+          <Button variant="outline" onClick={markPresent} disabled={student.accountStatus !== "Approved"}>Mark my presence</Button>
+        </div>
+      )}
 
       {/* Personal QR code for conductor scanning */}
       <Card>

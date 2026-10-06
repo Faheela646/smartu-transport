@@ -10,8 +10,8 @@ import {
   AlertTriangle,
   HelpCircle,
   LogOut,
-  Bell,
-  Search,
+  Ticket,
+  GraduationCap,
 } from "lucide-react";
 import { Logo } from "@/components/shared/Logo";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
@@ -19,7 +19,6 @@ import { NotificationBell } from "@/components/shared/NotificationBell";
 import { Chatbot } from "@/components/shared/Chatbot";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,8 +33,8 @@ import { cn, initials } from "@/lib/utils";
 const MOBILE_TABS = [
   { to: "/student", label: "Home", icon: Home, end: true },
   { to: "/student/transport", label: "Transport", icon: Bus },
-  { to: "/student/attendance", label: "Attendance", icon: QrCode },
-  { to: "/student/payments", label: "Payments", icon: CreditCard },
+  { to: "/student/semester", label: "Semester", icon: GraduationCap, roles: ["DAY_SCHOLAR", "FACULTY"] },
+  { to: "/student/tickets", label: "Tickets", icon: Ticket, roles: ["HOSTELITE"] },
   { to: "/student/profile", label: "Profile", icon: User },
 ];
 
@@ -43,6 +42,9 @@ const DESKTOP_NAV = [
   { to: "/student", label: "Dashboard", icon: Home, end: true },
   { to: "/student/transport", label: "Live Tracking & Route", icon: Bus },
   { to: "/student/attendance", label: "Attendance & QR", icon: QrCode },
+  { to: "/student/semester", label: "Semester Application", icon: GraduationCap, roles: ["DAY_SCHOLAR", "FACULTY"] },
+  { to: "/student/tickets", label: "Hostelite Tickets", icon: Ticket, roles: ["HOSTELITE"] },
+  { to: "/student/violations", label: "Violations & Fines", icon: AlertTriangle },
   { to: "/student/payments", label: "Fee & Fines", icon: CreditCard },
   { to: "/student/announcements", label: "Announcements", icon: Megaphone },
   { to: "/student/rules", label: "Rules & Policy", icon: FileText },
@@ -96,7 +98,7 @@ export default function StudentLayout() {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>
                   <p className="text-sm font-semibold">{user?.name}</p>
-                  <p className="text-xs text-muted-foreground">{user?.rollNo} • Day Scholar</p>
+                  <p className="text-xs text-muted-foreground">                  {user?.rollNo || user?.loginId} • {user?.role === "FACULTY" ? "Faculty" : user?.role === "HOSTELITE" ? "Hostelite" : "Day Scholar"}</p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => navigate("/student/profile")}>
@@ -126,7 +128,7 @@ export default function StudentLayout() {
         {/* Desktop Navigation Row */}
         <div className="hidden lg:block border-t border-border bg-background/50">
           <div className="mx-auto flex max-w-7xl items-center gap-1 px-8 py-2 overflow-x-auto">
-            {DESKTOP_NAV.map((item) => (
+            {DESKTOP_NAV.filter((item) => !item.roles || item.roles.includes(user?.role)).map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -158,7 +160,7 @@ export default function StudentLayout() {
 
       {/* Mobile Bottom Navigation Bar */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 flex h-16 items-center justify-around border-t border-border bg-background/95 backdrop-blur lg:hidden safe-bottom">
-        {MOBILE_TABS.map((tab) => (
+        {MOBILE_TABS.filter((tab) => !tab.roles || tab.roles.includes(user?.role)).map((tab) => (
           <NavLink
             key={tab.to}
             to={tab.to}

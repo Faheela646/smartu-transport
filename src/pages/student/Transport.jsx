@@ -1,17 +1,12 @@
 import { useState, useMemo, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   Bus,
   MapPin,
   Clock,
-  Navigation,
-  CheckCircle2,
-  AlertTriangle,
-  Radio,
   WifiOff,
   Users,
   Info,
-  Calendar,
   Layers,
 } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
@@ -27,7 +22,10 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useFleetStore } from "@/store/useFleetStore";
 import { useMapStore } from "@/store/useMapStore";
-import { CAMPUS_CENTER } from "@/data/mockData";
+import { useAuthStore } from "@/store/useAuthStore";
+import { useStudentStore } from "@/store/useStudentStore";
+import { useAttendanceStore } from "@/store/useAttendanceStore";
+import { useTransportWorkflowStore } from "@/store/useTransportWorkflowStore";
 
 // Custom leaflet icons
 const busIcon = L.divIcon({
@@ -58,39 +56,55 @@ export default function Transport() {
   const [activeSubTab, setActiveSubTab] = useState(initialTab);
   const [offlineSimulated, setOfflineSimulated] = useState(false);
 
+  const user = useAuthStore((state) => state.user);
   const { routes, buses, drivers } = useFleetStore();
   const { getBusPosition, startSimulation, stopSimulation } = useMapStore();
-
-  const selectedRoute = routes[0]; // RT-01 D-Ground
-  const assignedBus = buses.find((b) => b.id === selectedRoute.busId) || buses[0];
-  const assignedDriver = drivers.find((d) => d.id === selectedRoute.driverId) || drivers[0];
+  const student = useStudentStore((state) => state.students.find((record) => record.id === user?.id));
+  const attendanceHistory = useAttendanceStore((state) => state.attendanceHistory);
+  const tickets = useTransportWorkflowStore((state) => state.tickets);
+  const activeTicket = tickets.find((ticket) =>
+    ticket.userId === user?.id && ["Active", "HalfRedeemed"].includes(ticket.status)
+  );
+  const hasTransportAccess = user?.role === "HOSTELITE"
+    ? Boolean(activeTicket)
+    : student?.accountStatus === "Approved";
+  const routeId = user?.role === "HOSTELITE" ? activeTicket?.routeId : student?.routeId;
+  const selectedRoute = routes.find((route) => route.id === routeId) || routes[0];
+  const assignedBus = buses.find((bus) => bus.id === selectedRoute?.busId);
+  const assignedDriver = drivers.find((driver) => driver.id === selectedRoute?.driverId);
+  const pickupStopName = user?.role === "HOSTELITE" ? activeTicket?.stopId : student?.pickupStop;
+  const mapCenterStop = selectedRoute?.stops.find((stop) => stop.name === pickupStopName) || selectedRoute?.stops[0];
 
   // Start live simulation on mount, clean up on unmount
   useEffect(() => {
+    if (!hasTransportAccess) return undefined;
     startSimulation();
     return () => stopSimulation();
-  }, [startSimulation, stopSimulation]);
+  }, [hasTransportAccess, startSimulation, stopSimulation]);
 
   // Bus location state — derived from the map store's animated position
-  const rawPos = getBusPosition(selectedRoute.id);
+  const rawPos = getBusPosition(selectedRoute?.id);
   const busLocationData = rawPos ?? {
-    lat: selectedRoute.stops[0].lat + 0.005,
-    lng: selectedRoute.stops[0].lng - 0.002,
+    lat: (selectedRoute?.stops[0]?.lat || 31.4504) + 0.005,
+    lng: (selectedRoute?.stops[0]?.lng || 73.0782) - 0.002,
     speed: 38,
     heading: 45,
     lastUpdated: new Date().toLocaleTimeString(),
   };
 
   const polylineCoords = useMemo(
-    () => selectedRoute.stops.map((s) => [s.lat, s.lng]),
+    () => selectedRoute?.stops.map((s) => [s.lat, s.lng]) || [],
     [selectedRoute]
   );
 
   // Seat capacity calculations
-  const totalCapacity = assignedBus.capacity || 50;
-  const occupiedSeats = 32;
+  const totalCapacity = assignedBus?.capacity || 0;
+  const today = new Date().toISOString().slice(0, 10);
+  const occupiedSeats = Math.min(totalCapacity, attendanceHistory.filter((record) =>
+    (record.adate || record.date) === today && record.routeId === selectedRoute?.id
+  ).length);
   const availableSeats = Math.max(0, totalCapacity - occupiedSeats);
-  const occupancyPct = Math.round((occupiedSeats / totalCapacity) * 100);
+  const occupancyPct = totalCapacity ? Math.round((occupiedSeats / totalCapacity) * 100) : 0;
 
   const getOccupancyBadge = (pct) => {
     if (pct < 70) return <Badge variant="success">Available Seats ({availableSeats})</Badge>;
@@ -98,11 +112,39 @@ export default function Transport() {
     return <Badge variant="destructive">Full Capacity</Badge>;
   };
 
+  if (!hasTransportAccess) {
+    const applicationPath = user?.role === "HOSTELITE" ? "/student/tickets" : "/student/semester";
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
+          <p className="font-semibold">No active transport assignment</p>
+          <p className="text-sm text-muted-foreground">
+            {user?.role === "HOSTELITE"
+              ? "Request a ticket and wait for Admin approval before viewing its route."
+              : "Submit your semester application and wait for Admin approval before viewing a route."}
+          </p>
+          <Button asChild><Link to={applicationPath}>{user?.role === "HOSTELITE" ? "Request ticket" : "Apply for semester transport"}</Link></Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!selectedRoute || !assignedBus) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center">
+          <p className="font-semibold">Route or bus assignment unavailable</p>
+          <p className="mt-1 text-sm text-muted-foreground">Contact the Transport Office to confirm your approved route assignment.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Transport & Live Shuttle</h1>
-        <p className="text-sm text-muted-foreground">Track your shuttle live, view route stops, and check seat capacity.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Transport Route & Shuttle Demo</h1>
+        <p className="text-sm text-muted-foreground">View your approved route and browser-simulated shuttle position. Live GPS is not connected.</p>
       </div>
 
       <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
@@ -120,7 +162,7 @@ export default function Transport() {
               <Layers className="h-4 w-4 text-primary" />
               <span className="font-medium text-foreground">Network Mode:</span>
               <span className="text-muted-foreground">
-                {offlineSimulated ? "Simulated Offline Mode" : "Live Socket Stream Active"}
+                {offlineSimulated ? "Simulated Offline Mode" : "Local route simulation"}
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -133,7 +175,7 @@ export default function Transport() {
             <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-500/30 p-3 text-xs text-amber-700 dark:text-amber-400">
               <WifiOff className="h-4 w-4 shrink-0 text-amber-500" />
               <span>
-                <strong>⚠️ Live location temporarily offline:</strong> Displaying cached position from 7:42 AM. GPS connection will automatically reconnect once available.
+                <strong>⚠️ Demo map mode:</strong> This browser is showing sample route/location data; live GPS is not connected.
               </span>
             </div>
           )}
@@ -142,7 +184,7 @@ export default function Transport() {
           <Card className="overflow-hidden border-border">
             <div className="h-[380px] sm:h-[460px] w-full relative">
               <MapContainer
-                center={[selectedRoute.stops[1].lat, selectedRoute.stops[1].lng]}
+                center={[mapCenterStop?.lat || 31.4504, mapCenterStop?.lng || 73.0782]}
                 zoom={13}
                 className="h-full w-full z-0"
               >
@@ -165,7 +207,7 @@ export default function Transport() {
                       <div className="p-1 text-xs">
                         <p className="font-bold">{stop.name}</p>
                         <p className="text-muted-foreground">Scheduled: {stop.eta}</p>
-                        {index === 1 && <span className="text-emerald-600 font-semibold">Your Pickup Stop</span>}
+                        {stop.name === pickupStopName && <span className="text-emerald-600 font-semibold">Your Pickup Stop</span>}
                       </div>
                     </Popup>
                   </Marker>
@@ -176,7 +218,7 @@ export default function Transport() {
                   <Marker position={[busLocationData.lat, busLocationData.lng]} icon={busIcon}>
                     <Popup>
                       <div className="p-1 text-xs space-y-1">
-                        <p className="font-bold text-primary">{assignedBus.plate} (BUS-101)</p>
+                        <p className="font-bold text-primary">{assignedBus.plate} ({assignedBus.id})</p>
                         <p>Route: {selectedRoute.shortName}</p>
                         <p>Speed: {busLocationData.speed} km/h</p>
                       </div>
@@ -192,18 +234,18 @@ export default function Transport() {
                     <Bus className="h-4 w-4 text-primary" />
                     <span className="text-sm font-bold text-foreground">{assignedBus.plate}</span>
                     <Badge variant={offlineSimulated ? "secondary" : "success"} className="text-[10px]">
-                      {offlineSimulated ? "Offline Cache" : "🟢 Live On Time"}
+                      {offlineSimulated ? "Simulated Offline" : "Browser Demo"}
                     </Badge>
                   </div>
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs border-t border-border/50 pt-2">
                   <div>
-                    <span className="text-muted-foreground">Distance:</span>
-                    <p className="font-bold text-foreground">2.4 km away</p>
+                    <span className="text-muted-foreground">Departure:</span>
+                    <p className="font-bold text-foreground">{selectedRoute.departureTime}</p>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Est. Arrival (ETA):</span>
-                    <p className="font-bold text-primary">8 mins</p>
+                    <span className="text-muted-foreground">Today's boardings:</span>
+                    <p className="font-bold text-primary">{occupiedSeats}</p>
                   </div>
                 </div>
               </div>
@@ -228,7 +270,7 @@ export default function Transport() {
                 <div>
                   <span className="text-[11px] font-semibold text-muted-foreground uppercase">Pickup Stop</span>
                   <p className="text-sm font-bold text-foreground mt-0.5 flex items-center gap-1">
-                    <MapPin className="h-3.5 w-3.5 text-emerald-500" /> Kohinoor Chowk
+                  <MapPin className="h-3.5 w-3.5 text-emerald-500" /> {pickupStopName || "Not selected"}
                   </p>
                 </div>
                 <div>
@@ -240,7 +282,7 @@ export default function Transport() {
                 <div>
                   <span className="text-[11px] font-semibold text-muted-foreground uppercase">Assigned Driver</span>
                   <p className="text-sm font-bold text-foreground mt-0.5 flex items-center gap-1">
-                    <Users className="h-3.5 w-3.5 text-primary" /> {assignedDriver.name}
+                    <Users className="h-3.5 w-3.5 text-primary" /> {assignedDriver?.name || "Not assigned"}
                   </p>
                 </div>
               </div>
@@ -249,7 +291,7 @@ export default function Transport() {
                 <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Stop Sequence & Schedule</h3>
                 <div className="space-y-3 relative before:absolute before:left-4 before:top-3 before:bottom-3 before:w-0.5 before:bg-border">
                   {selectedRoute.stops.map((stop, idx) => {
-                    const isPickup = idx === 1;
+                    const isPickup = stop.name === pickupStopName;
                     return (
                       <div key={idx} className="flex items-center justify-between relative pl-8 text-sm">
                         <div

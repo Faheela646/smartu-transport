@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Bus, Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -51,7 +51,7 @@ export default function Login() {
   const handleForgot = (e) => {
     e.preventDefault();
     setForgotOpen(false);
-    toast.success("Password reset link sent to registered email.");
+    toast.info("Password reset email is not available in this frontend-only demo. Contact the Transport Office.");
     setForgotValue("");
   };
 
@@ -126,10 +126,7 @@ export default function Login() {
         </Card>
 
         <p className="mt-6 text-center text-sm text-white/80">
-          New to campus transport?{" "}
-          <Link to="/register" className="font-semibold text-white underline underline-offset-4 hover:text-accent">
-            Register an account
-          </Link>
+          Need transport access? Contact the Transport Office to have an account created for you.
         </p>
 
         <div className="mt-4 rounded-lg border border-white/15 bg-white/5 p-3 text-[11px] leading-relaxed text-white/70">
@@ -145,12 +142,12 @@ export default function Login() {
           <DialogHeader>
             <DialogTitle>Reset your password</DialogTitle>
             <DialogDescription>
-              Enter your registered email or roll number and we'll send a reset link.
+              Password reset email is unavailable in this frontend-only demo. Contact the Transport Office for help.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleForgot} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="forgot">Email or Roll Number</Label>
+              <Label htmlFor="forgot">Registered email or roll number</Label>
               <Input
                 id="forgot"
                 value={forgotValue}

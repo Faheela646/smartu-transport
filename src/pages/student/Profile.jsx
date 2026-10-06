@@ -43,11 +43,12 @@ export default function Profile() {
     name: user?.name || "Student",
     rollNo: user?.rollNo || user?.loginId || "22F-3082",
     role: user?.role || "DAY_SCHOLAR",
-    routeId: "RT-01",
+    routeId: null,
   };
 
-  const assignedRoute = routes.find((r) => r.id === student.routeId) || routes[0];
-  const pickupStop = assignedRoute?.stops[1] || assignedRoute?.stops[0] || { name: "Main Stop" };
+  const assignedRoute = routes.find((r) => r.id === student.routeId);
+  const pickupStop = assignedRoute?.stops.find((stop) => stop.name === student.pickupStop)
+    || (student.accountStatus === "Approved" ? assignedRoute?.stops[1] || assignedRoute?.stops[0] : null);
   const studentEmail = student.email || generateStudentEmail(student.rollNo);
   const studentPassword = student.password || generateStudentPassword(student.rollNo);
   const rfidNumber = `RFID-${student.rollNo.replace(/[^A-Za-z0-9]/g, "")}`;
@@ -125,7 +126,7 @@ export default function Profile() {
           <CardTitle className="text-base font-bold flex items-center gap-2 text-primary">
             <Shield className="h-5 w-5" /> Allocated Student Login Account
           </CardTitle>
-          <CardDescription>Use these credentials to log in on any device.</CardDescription>
+          <CardDescription>Credentials in this frontend demo are stored in this browser. Cross-device sign-in requires the backend.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -169,14 +170,14 @@ export default function Profile() {
             <div className="rounded-xl border border-border p-3.5 bg-background/80 space-y-1">
               <span className="text-muted-foreground">Assigned Route</span>
               <p className="font-bold text-sm text-foreground flex items-center gap-1.5">
-                <Bus className="h-4 w-4 text-primary" /> {assignedRoute.shortName || assignedRoute.name}
+                <Bus className="h-4 w-4 text-primary" /> {assignedRoute?.shortName || assignedRoute?.name || "Not assigned"}
               </p>
             </div>
 
             <div className="rounded-xl border border-border p-3.5 bg-background/80 space-y-1">
               <span className="text-muted-foreground">Designated Pickup Stop</span>
               <p className="font-bold text-sm text-foreground flex items-center gap-1.5">
-                <MapPin className="h-4 w-4 text-emerald-500" /> {pickupStop.name}
+                <MapPin className="h-4 w-4 text-emerald-500" /> {pickupStop?.name || "Not selected"}
               </p>
             </div>
 
@@ -188,7 +189,7 @@ export default function Profile() {
             <div className="rounded-xl border border-border p-3.5 bg-background/80 space-y-1">
               <span className="text-muted-foreground">Transport Subscription</span>
               <p className="font-bold text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                <CheckCircle2 className="h-4 w-4" /> Active ({student.feeStatus === "Paid" ? "Paid" : "Registered"})
+                <CheckCircle2 className="h-4 w-4" /> {student.accountStatus || "N/A"}
               </p>
             </div>
           </div>

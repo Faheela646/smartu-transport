@@ -1,18 +1,35 @@
 import { create } from "zustand";
-import { BUSES, DRIVERS, CONDUCTORS, ROUTES } from "@/data/mockData";
+import { persist } from "zustand/middleware";
+import { BUSES, DRIVERS, CONDUCTORS, ROUTES, CAMPUS_CENTER } from "@/data/mockData";
 
-export const useFleetStore = create((set, get) => ({
+const INITIAL_STOPS = [...new Map(
+  ROUTES.flatMap((route) => route.stops.map((stop) => [stop.name.toLowerCase(), stop]))
+).values()].map((stop, index) => ({ id: `STOP-${String(index + 1).padStart(3, "0")}`, ...stop }));
+
+function nextRecordId(prefix, records, firstNumber = 1) {
+  const usedIds = new Set(records.map((record) => record.id));
+  let number = firstNumber;
+  let id = `${prefix}-${String(number).padStart(2, "0")}`;
+  while (usedIds.has(id)) {
+    number += 1;
+    id = `${prefix}-${String(number).padStart(2, "0")}`;
+  }
+  return id;
+}
+
+export const useFleetStore = create(persist((set, get) => ({
   buses: BUSES,
   drivers: DRIVERS,
   conductors: CONDUCTORS,
   routes: ROUTES,
+  stops: INITIAL_STOPS,
 
   // ---- Buses ----
   addBus: (bus) =>
     set((state) => ({
       buses: [
         ...state.buses,
-        { id: `BUS-${100 + state.buses.length + 1}`, status: "Reserve", routeId: null, ...bus },
+        { id: nextRecordId("BUS", state.buses, 101), status: "Reserve", routeId: null, ...bus },
       ],
     })),
 
@@ -21,7 +38,16 @@ export const useFleetStore = create((set, get) => ({
       buses: state.buses.map((b) => (b.id === id ? { ...b, ...patch } : b)),
     })),
 
-  deleteBus: (id) => set((state) => ({ buses: state.buses.filter((b) => b.id !== id) })),
+  deleteBus: (id) => set((state) => ({
+    buses: state.buses.filter((bus) => bus.id !== id),
+    routes: state.routes.map((route) => route.busId === id ? { ...route, busId: null } : route),
+    drivers: state.drivers.map((driver) =>
+      driver.assignedBusId === id ? { ...driver, status: "Reserve", assignedBusId: null } : driver
+    ),
+    conductors: state.conductors.map((conductor) =>
+      conductor.assignedBusId === id ? { ...conductor, status: "Reserve", assignedBusId: null } : conductor
+    ),
+  })),
 
   // Sets a bus to maintenance and swaps its route to a replacement bus atomically.
   sendBusToMaintenance: (busId, replacementBusId) =>
@@ -43,7 +69,7 @@ export const useFleetStore = create((set, get) => ({
     set((state) => ({
       drivers: [
         ...state.drivers,
-        { id: `DRV-${String(state.drivers.length + 1).padStart(2, "0")}`, status: "Reserve", assignedBusId: null, ...driver },
+        { id: nextRecordId("DRV", state.drivers), status: "Reserve", assignedBusId: null, ...driver },
       ],
     })),
 
@@ -52,7 +78,10 @@ export const useFleetStore = create((set, get) => ({
       drivers: state.drivers.map((d) => (d.id === id ? { ...d, ...patch } : d)),
     })),
 
-  deleteDriver: (id) => set((state) => ({ drivers: state.drivers.filter((d) => d.id !== id) })),
+  deleteDriver: (id) => set((state) => ({
+    drivers: state.drivers.filter((driver) => driver.id !== id),
+    routes: state.routes.map((route) => route.driverId === id ? { ...route, driverId: null } : route),
+  })),
 
   reassignDriver: (routeId, newDriverId) =>
     set((state) => {
@@ -73,7 +102,7 @@ export const useFleetStore = create((set, get) => ({
     set((state) => ({
       conductors: [
         ...state.conductors,
-        { id: `CND-${String(state.conductors.length + 1).padStart(2, "0")}`, status: "Reserve", assignedBusId: null, ...conductor },
+        { id: nextRecordId("CND", state.conductors), status: "Reserve", assignedBusId: null, ...conductor },
       ],
     })),
 
@@ -83,7 +112,10 @@ export const useFleetStore = create((set, get) => ({
     })),
 
   deleteConductor: (id) =>
-    set((state) => ({ conductors: state.conductors.filter((c) => c.id !== id) })),
+    set((state) => ({
+      conductors: state.conductors.filter((conductor) => conductor.id !== id),
+      routes: state.routes.map((route) => route.conductorId === id ? { ...route, conductorId: null } : route),
+    })),
 
   reassignConductor: (routeId, newConductorId) =>
     set((state) => {
@@ -102,15 +134,179 @@ export const useFleetStore = create((set, get) => ({
   // ---- Routes ----
   addRoute: (route) =>
     set((state) => ({
-      routes: [...state.routes, { id: `RT-${String(state.routes.length + 1).padStart(2, "0")}`, ...route }],
+      routes: [...state.routes, { id: nextRecordId("RT", state.routes), ...route }],
     })),
 
   updateRoute: (id, patch) =>
+    set((state) => {
+      const route = state.routes.find((record) => record.id === id);
+      if (!route) return {};
+      const updatedRoute = { ...route, ...patch };
+      const busChanged = Object.hasOwn(patch, "busId") && patch.busId !== route.busId;
+      const driverChanged = Object.hasOwn(patch, "driverId") && patch.driverId !== route.driverId;
+      const conductorChanged = Object.hasOwn(patch, "conductorId") && patch.conductorId !== route.conductorId;
+      const conflictingRoutes = busChanged && patch.busId
+        ? state.routes.filter((record) => record.id !== id && record.busId === patch.busId)
+        : [];
+      const conflictingDriverRoutes = driverChanged && patch.driverId
+        ? state.routes.filter((record) => record.id !== id && record.driverId === patch.driverId)
+        : [];
+      const conflictingConductorRoutes = conductorChanged && patch.conductorId
+        ? state.routes.filter((record) => record.id !== id && record.conductorId === patch.conductorId)
+        : [];
+
+      return {
+        routes: state.routes.map((record) => {
+          if (record.id === id) return updatedRoute;
+          if (conflictingRoutes.some((conflict) => conflict.id === record.id)) return { ...record, busId: null };
+          if (conflictingDriverRoutes.some((conflict) => conflict.id === record.id)) return { ...record, driverId: null };
+          if (conflictingConductorRoutes.some((conflict) => conflict.id === record.id)) return { ...record, conductorId: null };
+          return record;
+        }),
+        buses: state.buses.map((bus) => {
+          if (busChanged && bus.id === route.busId) {
+            return { ...bus, routeId: null, status: bus.status === "Under Maintenance" ? bus.status : "Reserve" };
+          }
+          if (busChanged && bus.id === patch.busId) {
+            return { ...bus, routeId: id, status: bus.status === "Under Maintenance" ? bus.status : "Active" };
+          }
+          return bus;
+        }),
+        drivers: state.drivers.map((driver) => {
+          if ((driverChanged && driver.id === route.driverId) || conflictingRoutes.some((record) => record.driverId === driver.id)) {
+            return { ...driver, status: "Reserve", assignedBusId: null };
+          }
+          if (conflictingDriverRoutes.some((record) => record.driverId === driver.id)) {
+            return { ...driver, status: "Reserve", assignedBusId: null };
+          }
+          if (driverChanged && driver.id === patch.driverId) {
+            return {
+              ...driver,
+              status: updatedRoute.busId ? "Active" : "Reserve",
+              assignedBusId: updatedRoute.busId || null,
+            };
+          }
+          if (busChanged && !driverChanged && driver.id === route.driverId) {
+            return {
+              ...driver,
+              status: updatedRoute.busId ? "Active" : "Reserve",
+              assignedBusId: updatedRoute.busId || null,
+            };
+          }
+          return driver;
+        }),
+        conductors: state.conductors.map((conductor) => {
+          if ((conductorChanged && conductor.id === route.conductorId) || conflictingRoutes.some((record) => record.conductorId === conductor.id)) {
+            return { ...conductor, status: "Reserve", assignedBusId: null };
+          }
+          if (conflictingConductorRoutes.some((record) => record.conductorId === conductor.id)) {
+            return { ...conductor, status: "Reserve", assignedBusId: null };
+          }
+          if (conductorChanged && conductor.id === patch.conductorId) {
+            return {
+              ...conductor,
+              status: updatedRoute.busId ? "Active" : "Reserve",
+              assignedBusId: updatedRoute.busId || null,
+            };
+          }
+          if (busChanged && !conductorChanged && conductor.id === route.conductorId) {
+            return {
+              ...conductor,
+              status: updatedRoute.busId ? "Active" : "Reserve",
+              assignedBusId: updatedRoute.busId || null,
+            };
+          }
+          return conductor;
+        }),
+      };
+    }),
+
+  deleteRoute: (id) =>
+    set((state) => {
+      const route = state.routes.find((record) => record.id === id);
+      return {
+        routes: state.routes.filter((record) => record.id !== id),
+        buses: state.buses.map((bus) => bus.id === route?.busId
+          ? { ...bus, routeId: null, status: bus.status === "Under Maintenance" ? bus.status : "Reserve" }
+          : bus),
+        drivers: state.drivers.map((driver) => driver.id === route?.driverId
+          ? { ...driver, status: "Reserve", assignedBusId: null }
+          : driver),
+        conductors: state.conductors.map((conductor) => conductor.id === route?.conductorId
+          ? { ...conductor, status: "Reserve", assignedBusId: null }
+          : conductor),
+      };
+    }),
+
+  addStop: (stop) => {
+    const name = stop.name.trim();
+    if (!name || get().stops.some((record) => record.name.toLowerCase() === name.toLowerCase())) {
+      return { success: false, error: "Stop name is required and must be unique." };
+    }
+    const record = {
+      id: nextRecordId("STOP", get().stops),
+      name,
+      lat: Number(stop.lat) || CAMPUS_CENTER.lat,
+      lng: Number(stop.lng) || CAMPUS_CENTER.lng,
+    };
+    set((state) => ({ stops: [...state.stops, record] }));
+    return { success: true, stop: record };
+  },
+
+  updateStop: (id, patch) =>
     set((state) => ({
-      routes: state.routes.map((r) => (r.id === id ? { ...r, ...patch } : r)),
+      stops: state.stops.map((stop) => stop.id === id ? { ...stop, ...patch } : stop),
+      routes: state.routes.map((route) => ({
+        ...route,
+        stops: route.stops.map((stop) => {
+          const oldStop = state.stops.find((record) => record.id === id);
+          return oldStop && stop.name === oldStop.name ? { ...stop, ...patch } : stop;
+        }),
+      })),
     })),
 
-  deleteRoute: (id) => set((state) => ({ routes: state.routes.filter((r) => r.id !== id) })),
+  deleteStop: (id) =>
+    set((state) => {
+      const stop = state.stops.find((record) => record.id === id);
+      return {
+        stops: state.stops.filter((record) => record.id !== id),
+        routes: state.routes.map((route) => ({
+          ...route,
+          stops: route.stops.filter((item) => item.name !== stop?.name),
+        })),
+      };
+    }),
+
+  addRouteStop: (routeId, stopId, eta = "") => {
+    const stop = get().stops.find((record) => record.id === stopId);
+    if (!stop) return { success: false, error: "Select an existing stop." };
+    const route = get().routes.find((record) => record.id === routeId);
+    if (!route) return { success: false, error: "Route not found." };
+    if (route.stops.some((record) => record.name === stop.name)) {
+      return { success: false, error: "That stop is already on this route." };
+    }
+    set((state) => ({
+      routes: state.routes.map((record) => record.id === routeId
+        ? { ...record, stops: [...record.stops, { name: stop.name, lat: stop.lat, lng: stop.lng, eta }] }
+        : record),
+    }));
+    return { success: true };
+  },
+
+  updateRouteStop: (routeId, stopName, patch) =>
+    set((state) => ({
+      routes: state.routes.map((route) => route.id !== routeId ? route : {
+        ...route,
+        stops: route.stops.map((stop) => stop.name === stopName ? { ...stop, ...patch } : stop),
+      }),
+    })),
+
+  removeRouteStop: (routeId, stopName) =>
+    set((state) => ({
+      routes: state.routes.map((route) => route.id === routeId
+        ? { ...route, stops: route.stops.filter((stop) => stop.name !== stopName) }
+        : route),
+    })),
 
   // ---- Selectors ----
   getRoute: (id) => get().routes.find((r) => r.id === id),
@@ -120,4 +316,7 @@ export const useFleetStore = create((set, get) => ({
   getReserveDrivers: () => get().drivers.filter((d) => d.status !== "Active"),
   getReserveConductors: () => get().conductors.filter((c) => c.status !== "Active"),
   getReserveBuses: () => get().buses.filter((b) => b.status === "Reserve"),
+}), {
+  name: "smartu-fleet",
+  merge: (persistedState, currentState) => ({ ...currentState, ...persistedState, stops: persistedState?.stops || currentState.stops }),
 }));

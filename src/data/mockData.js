@@ -236,6 +236,7 @@ export function findAccount(loginId, password) {
     if (!cand) return false;
     const rNo = (cand.rollNo || cand.loginId || "").toLowerCase();
     const email = (cand.email || generateStudentEmail(cand.rollNo || cand.loginId) || "").toLowerCase();
+    const contactEmail = (cand.contactEmail || "").toLowerCase();
     const lId = (cand.loginId || "").toLowerCase();
     const rNoStripped = rNo.replace(/[^a-z0-9]/g, "");
     const loginStripped = cleanLogin.replace(/[^a-z0-9]/g, "");
@@ -244,6 +245,7 @@ export function findAccount(loginId, password) {
       cleanLogin === lId ||
       cleanLogin === rNo ||
       cleanLogin === email ||
+      cleanLogin === contactEmail ||
       cleanLogin.split("@")[0] === email.split("@")[0] ||
       cleanLogin.split("@")[0] === rNo ||
       (loginStripped && loginStripped === rNoStripped)
@@ -271,12 +273,17 @@ export function findAccount(loginId, password) {
     }
 
     const studentAccount = studentList.find(isUserMatch);
+    if (studentAccount?.accountStatus === "Rejected") return null;
     if (studentAccount && !isPassMatch(studentAccount)) return null;
     if (studentAccount) {
       return {
         loginId: studentAccount.rollNo,
         rollNo: studentAccount.rollNo,
         email: studentAccount.email,
+        contactEmail: studentAccount.contactEmail,
+        userType: studentAccount.userType || (studentAccount.role === "FACULTY" ? "faculty" : "student"),
+        accountStatus: studentAccount.accountStatus || "Approved",
+        seatNo: studentAccount.seatNo ?? null,
         password: studentAccount.password,
         role: studentAccount.role,
         name: studentAccount.name,
@@ -289,7 +296,14 @@ export function findAccount(loginId, password) {
 
   // 2. Fallback to Search in pre-provisioned MOCK_ACCOUNTS
   let account = MOCK_ACCOUNTS.find((a) => isUserMatch(a) && isPassMatch(a));
-  if (account) return account;
+  if (account) {
+    return {
+      ...account,
+      userType: account.userType || (account.role === "FACULTY" ? "faculty" : "student"),
+      accountStatus: account.accountStatus || "Approved",
+      seatNo: account.seatNo ?? null,
+    };
+  }
 
   return null;
 }

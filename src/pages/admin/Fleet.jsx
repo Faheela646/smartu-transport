@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, Wrench } from "lucide-react";
+import { Plus, Wrench, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,7 @@ import { useSocketStore } from "@/store/useSocketStore";
 const STATUS_VARIANT = { Active: "success", Reserve: "secondary", "Under Maintenance": "destructive" };
 
 export default function Fleet() {
-  const { buses, routes, updateBus, sendBusToMaintenance, addBus } = useFleetStore();
+  const { buses, routes, updateBus, sendBusToMaintenance, addBus, deleteBus } = useFleetStore();
   const triggerEvent = useSocketStore((s) => s.triggerEvent);
 
   const [maintenanceTarget, setMaintenanceTarget] = useState(null);
@@ -119,10 +119,20 @@ export default function Fleet() {
                     <Badge variant={STATUS_VARIANT[b.status] || "secondary"}>{b.status}</Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="outline" size="sm" onClick={() => handleToggleMaintenance(b)}>
-                      <Wrench className="h-3.5 w-3.5" />
-                      {b.status === "Under Maintenance" ? "Return to service" : "Under Maintenance"}
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleToggleMaintenance(b)}>
+                        <Wrench className="h-3.5 w-3.5" />
+                        {b.status === "Under Maintenance" ? "Return to service" : "Under Maintenance"}
+                      </Button>
+                      <Button variant="ghost" size="icon" aria-label={`Delete bus ${b.plate}`} className="text-destructive" onClick={() => {
+                        if (window.confirm(`Delete ${b.plate}? Its route and staff assignments will be cleared.`)) {
+                          deleteBus(b.id);
+                          toast.success(`${b.plate} removed from the fleet.`);
+                        }
+                      }}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

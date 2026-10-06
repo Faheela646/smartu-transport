@@ -23,19 +23,33 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useFleetStore } from "@/store/useFleetStore";
+import { CAMPUS_CENTER } from "@/data/mockData";
 
 export default function AdminRoutes() {
-  const { routes, buses, drivers, conductors, addRoute, updateRoute, deleteRoute } = useFleetStore();
+  const { routes, buses, drivers, conductors, stops, addRoute, updateRoute, deleteRoute, addStop, updateStop, deleteStop, addRouteStop, updateRouteStop, removeRouteStop } = useFleetStore();
   const [addOpen, setAddOpen] = useState(false);
+  const [stopName, setStopName] = useState("");
+  const [selectedStopByRoute, setSelectedStopByRoute] = useState({});
   const [form, setForm] = useState({ name: "", shortName: "", departureTime: "", stopsText: "" });
 
   const handleAdd = (e) => {
     e.preventDefault();
-    const stops = form.stopsText
+    const routeStops = form.stopsText
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean)
-      .map((name, i) => ({ name, lat: 31.45 + i * 0.01, lng: 73.08 - i * 0.01, eta: form.departureTime }));
+      .map((name) => {
+        const existingStop = stops.find((stop) => stop.name.toLowerCase() === name.toLowerCase());
+        return {
+          name,
+          lat: existingStop?.lat || CAMPUS_CENTER.lat,
+          lng: existingStop?.lng || CAMPUS_CENTER.lng,
+          eta: form.departureTime,
+        };
+      });
+    routeStops.forEach((stop) => {
+      if (!stops.some((existing) => existing.name.toLowerCase() === stop.name.toLowerCase())) addStop(stop);
+    });
 
     addRoute({
       name: form.name,
@@ -44,12 +58,25 @@ export default function AdminRoutes() {
       busId: null,
       driverId: null,
       conductorId: null,
-      stops,
+      stops: routeStops,
     });
     toast.success("Route created.");
     setAddOpen(false);
     setForm({ name: "", shortName: "", departureTime: "", stopsText: "" });
   };
+
+  const handleAddStop = (event) => {
+    event.preventDefault();
+    const result = addStop({ name: stopName });
+    if (!result.success) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(`Stop "${result.stop.name}" added to the global stop list.`);
+    setStopName("");
+  };
+
+  const availableStops = (route) => stops.filter((stop) => !route.stops.some((assigned) => assigned.name === stop.name));
 
   return (
     <div className="space-y-5">
@@ -62,6 +89,33 @@ export default function AdminRoutes() {
           <Plus className="h-4 w-4" /> Create Route
         </Button>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Reusable pickup stops</CardTitle>
+          <p className="text-xs text-muted-foreground">Manage the global stop catalog and assign stops to routes below.</p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <form onSubmit={handleAddStop} className="flex gap-2">
+            <Input value={stopName} onChange={(event) => setStopName(event.target.value)} placeholder="New stop name" required />
+            <Button type="submit"><Plus className="mr-1 h-4 w-4" />Add stop</Button>
+          </form>
+          <div className="flex flex-wrap gap-2">
+            {stops.map((stop) => (
+              <Badge key={stop.id} variant="outline" className="gap-2">
+                {stop.name}
+                <button type="button" aria-label={`Rename ${stop.name}`} onClick={() => {
+                  const name = window.prompt("Stop name", stop.name);
+                  if (name?.trim()) updateStop(stop.id, { name: name.trim() });
+                }}>Edit</button>
+                <button type="button" aria-label={`Delete ${stop.name}`} className="text-destructive" onClick={() => {
+                  if (window.confirm(`Delete ${stop.name} from the stop list and all routes?`)) deleteStop(stop.id);
+                }}>×</button>
+              </Badge>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {routes.map((route) => (
@@ -122,9 +176,21 @@ export default function AdminRoutes() {
                     <div key={i} className="flex items-center gap-2 text-sm">
                       <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" />
                       <span className="text-foreground">{stop.name}</span>
-                      <Badge variant="outline" className="ml-auto text-[10px]">{stop.eta}</Badge>
+                      <Input aria-label={`${stop.name} arrival time`} className="ml-auto h-7 w-24 px-2 text-xs" value={stop.eta || ""} onChange={(event) => updateRouteStop(route.id, stop.name, { eta: event.target.value })} />
+                      <Button variant="ghost" size="sm" onClick={() => removeRouteStop(route.id, stop.name)}>Remove</Button>
                     </div>
                   ))}
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <Select value={selectedStopByRoute[route.id] || ""} onValueChange={(value) => setSelectedStopByRoute((current) => ({ ...current, [route.id]: value }))}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Add existing stop" /></SelectTrigger>
+                    <SelectContent>{availableStops(route).map((stop) => <SelectItem key={stop.id} value={stop.id}>{stop.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Button variant="outline" onClick={() => {
+                    const result = addRouteStop(route.id, selectedStopByRoute[route.id]);
+                    if (result.success) setSelectedStopByRoute((current) => ({ ...current, [route.id]: "" }));
+                    else toast.error(result.error);
+                  }}>Add</Button>
                 </div>
               </div>
             </CardContent>

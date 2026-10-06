@@ -4,7 +4,6 @@ import { ThemeProvider } from "@/components/shared/ThemeProvider";
 import { ProtectedRoute } from "@/components/shared/ProtectedRoute";
 
 import Login from "@/pages/auth/Login";
-import Register from "@/pages/auth/Register";
 import Unauthorized from "@/pages/auth/Unauthorized";
 
 import AdminLayout from "@/components/shared/AdminLayout";
@@ -15,11 +14,11 @@ import AdminFleet from "@/pages/admin/Fleet";
 import AdminRoutes from "@/pages/admin/Routes";
 import AdminAnnouncements from "@/pages/admin/Announcements";
 import AdminSettings from "@/pages/admin/Settings";
-import AdminFines from "@/pages/admin/FinesPayments";
 import AdminIssues from "@/pages/admin/AdminIssues";
 import AdminLiveTracking from "@/pages/admin/AdminLiveTracking";
 import AdminReports from "@/pages/admin/AdminReports";
 import AdminAttendance from "@/pages/admin/AdminAttendance";
+import AdminApprovals from "@/pages/admin/Approvals";
 
 import StudentLayout from "@/components/shared/StudentLayout";
 import StudentHome from "@/pages/student/Home";
@@ -32,9 +31,13 @@ import StudentRules from "@/pages/student/Rules";
 import StudentReportIssue from "@/pages/student/ReportIssue";
 import StudentHelp from "@/pages/student/HelpSupport";
 import StudentProfile from "@/pages/student/Profile";
+import StudentSemesterRegistration from "@/pages/student/SemesterRegistration";
+import StudentTickets from "@/pages/student/Tickets";
+import StudentViolationFines from "@/pages/student/ViolationFines";
 
 import ConductorLayout from "@/components/shared/ConductorLayout";
 import ConductorScanner from "@/pages/conductor/Scanner";
+import ConductorViolations from "@/pages/conductor/Violations";
 
 import DriverLayout from "@/components/shared/DriverLayout";
 import DriverDashboard from "@/pages/driver/Dashboard";
@@ -45,7 +48,6 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
           <Route path="/403" element={<Unauthorized />} />
 
           <Route
@@ -63,11 +65,12 @@ function App() {
             <Route path="routes" element={<AdminRoutes />} />
             <Route path="announcements" element={<AdminAnnouncements />} />
             <Route path="settings" element={<AdminSettings />} />
-            <Route path="fines" element={<AdminFines />} />
+            <Route path="fines" element={<Navigate to="/admin/approvals" replace />} />
             <Route path="issues" element={<AdminIssues />} />
             <Route path="tracking" element={<AdminLiveTracking />} />
             <Route path="reports" element={<AdminReports />} />
             <Route path="attendance" element={<AdminAttendance />} />
+            <Route path="approvals" element={<AdminApprovals />} />
           </Route>
 
           <Route
@@ -88,6 +91,9 @@ function App() {
             <Route path="report-issue" element={<StudentReportIssue />} />
             <Route path="help" element={<StudentHelp />} />
             <Route path="profile" element={<StudentProfile />} />
+            <Route path="semester" element={<StudentSemesterRegistration />} />
+            <Route path="tickets" element={<StudentTickets />} />
+            <Route path="violations" element={<StudentViolationFines />} />
           </Route>
 
           <Route
@@ -99,6 +105,7 @@ function App() {
             }
           >
             <Route index element={<ConductorScanner />} />
+            <Route path="violations" element={<ConductorViolations />} />
           </Route>
 
           <Route

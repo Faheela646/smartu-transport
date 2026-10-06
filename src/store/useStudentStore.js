@@ -5,15 +5,20 @@ import { STUDENTS, MOCK_ACCOUNTS, generateStudentEmail, generateStudentPassword 
 export const useStudentStore = create(
   persist(
     (set, get) => ({
-      students: STUDENTS,
+      students: STUDENTS.map((student) => ({
+        ...student,
+        userType: student.userType || "student",
+        accountStatus: student.accountStatus || "Approved",
+        seatNo: student.seatNo ?? null,
+      })),
 
-      addStudent: ({ name, rollNo, role, routeId, email: suppliedEmail, contactEmail, password: suppliedPassword, phone, staffId, pickupStop, semester, feeStatus }) => {
+      addStudent: ({ name, rollNo, role, routeId, email: suppliedEmail, contactEmail, password: suppliedPassword, phone, staffId, pickupStop, semester, feeStatus, userType, accountStatus = "N/A", seatNo = null }) => {
         const formattedRollNo = rollNo.trim().toUpperCase();
         const email = suppliedEmail || generateStudentEmail(formattedRollNo);
         const password = suppliedPassword || generateStudentPassword(formattedRollNo);
 
         const student = {
-          id: `STU-${String(get().students.length + 1).padStart(3, "0")}`,
+          id: `USR-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
           name,
           rollNo: formattedRollNo,
           email,
@@ -25,22 +30,53 @@ export const useStudentStore = create(
           staffId,
           pickupStop,
           semester,
+          userType: userType || (role === "FACULTY" ? "faculty" : "student"),
+          accountStatus,
+          seatNo,
           cnic: "—",
           feeStatus: feeStatus || "Pending",
         };
         set((state) => ({ students: [...state.students, student] }));
-        // Provision the login account with email, roll number, and password
         MOCK_ACCOUNTS.push({
           loginId: formattedRollNo,
           rollNo: formattedRollNo,
           email,
           password,
           role,
+          userType: student.userType,
+          accountStatus: student.accountStatus,
+          seatNo: student.seatNo,
           name,
           refId: student.id,
         });
         return { student, email, password };
       },
+
+      bulkCreateStudents: (records) => records.map((record) => get().addStudent(record)),
+
+      updateAccountStatus: (id, accountStatus) =>
+        set((state) => ({
+          students: state.students.map((student) =>
+            student.id === id ? { ...student, accountStatus } : student
+          ),
+        })),
+
+      approveSemester: (id, { seatNo, routeId, pickupStop, semester }) =>
+        set((state) => ({
+          students: state.students.map((student) =>
+            student.id === id
+              ? {
+                  ...student,
+                  accountStatus: "Approved",
+                  seatNo,
+                  routeId,
+                  pickupStop,
+                  semester,
+                  feeStatus: "Paid",
+                }
+              : student
+          ),
+        })),
 
       updateStudent: (id, patch) =>
         set((state) => ({
@@ -54,7 +90,14 @@ export const useStudentStore = create(
           ),
         })),
 
-      deleteStudent: (id) => set((state) => ({ students: state.students.filter((s) => s.id !== id) })),
+      deleteStudent: (id) => set((state) => {
+        const student = state.students.find((record) => record.id === id);
+        if (student) {
+          const accountIndex = MOCK_ACCOUNTS.findIndex((account) => account.refId === id);
+          if (accountIndex !== -1) MOCK_ACCOUNTS.splice(accountIndex, 1);
+        }
+        return { students: state.students.filter((s) => s.id !== id) };
+      }),
 
       approveFeeChallan: (id) =>
         set((state) => ({
@@ -63,6 +106,16 @@ export const useStudentStore = create(
     }),
     {
       name: "smartu-students",
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...persistedState,
+        students: (persistedState?.students || currentState.students).map((student) => ({
+          ...student,
+          userType: student.userType || (student.role === "FACULTY" ? "faculty" : "student"),
+          accountStatus: student.accountStatus || "Approved",
+          seatNo: student.seatNo ?? null,
+        })),
+      }),
     }
   )
 );

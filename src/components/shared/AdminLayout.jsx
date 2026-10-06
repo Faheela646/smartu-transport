@@ -9,11 +9,11 @@ import {
   Settings,
   LogOut,
   Bell,
-  Receipt,
   Map,
   ClipboardList,
   MessageSquareWarning,
   BarChart3,
+  BadgeCheck,
 } from "lucide-react";
 import { Logo } from "@/components/shared/Logo";
 import { ThemeToggle } from "@/components/shared/ThemeToggle";
@@ -35,12 +35,12 @@ import { cn, initials } from "@/lib/utils";
 const NAV_ITEMS = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/admin/students", label: "Students", icon: Users },
+  { to: "/admin/approvals", label: "Approvals", icon: BadgeCheck },
   { to: "/admin/staff", label: "Staff", icon: UserCog },
   { to: "/admin/fleet", label: "Fleet", icon: Bus },
   { to: "/admin/routes", label: "Routes", icon: RouteIcon },
   { to: "/admin/tracking", label: "Live Tracking", icon: Map },
   { to: "/admin/attendance", label: "Attendance Logs", icon: ClipboardList },
-  { to: "/admin/fines", label: "Fines & Payments", icon: Receipt },
   { to: "/admin/issues", label: "Helpdesk", icon: MessageSquareWarning },
   { to: "/admin/announcements", label: "Announcements", icon: Megaphone },
   { to: "/admin/reports", label: "Reports", icon: BarChart3 },

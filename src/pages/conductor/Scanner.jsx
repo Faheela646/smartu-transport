@@ -14,9 +14,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuthStore } from "@/store/useAuthStore";
 import { useFleetStore } from "@/store/useFleetStore";
-import { useFineStore } from "@/store/useFineStore";
 import { useStudentStore } from "@/store/useStudentStore";
 import { useAttendanceStore } from "@/store/useAttendanceStore";
+import { useTransportWorkflowStore } from "@/store/useTransportWorkflowStore";
+import { useStudentStore as useRosterStore } from "@/store/useStudentStore";
 import { parseStudentQrPayload } from "@/lib/studentQr";
 import { cn } from "@/lib/utils";
 
@@ -40,27 +41,27 @@ function playTone(success) {
   }
 }
 
-function validateScan(qrValue, routeId, alreadyBoarded, fines, students) {
+function validateScan(qrValue, routeId, alreadyBoarded, students) {
   const payload = parseStudentQrPayload(qrValue);
   if (!payload) return { allowed: false, reason: "Invalid QR Code" };
   const student = students.find(
     (record) => record.id === payload.studentId && record.rollNo === payload.rollNo
   );
   if (!student) return { allowed: false, reason: "Invalid QR Code" };
+  if (student.accountStatus !== "Approved") return { allowed: false, reason: "Account Not Approved", student };
   if (alreadyBoarded.has(student.rollNo)) return { allowed: false, reason: "Already Scanned", student };
   if (student.routeId !== routeId) return { allowed: false, reason: "Wrong Route", student };
-  const unpaid = fines.some((f) => f.rollNo === student.rollNo && f.status === "Unpaid");
-  if (unpaid) return { allowed: false, reason: "Unpaid Fine", student };
   return { allowed: true, student };
 }
 
 export default function ConductorScanner() {
   const user = useAuthStore((s) => s.user);
   const { conductors, buses, routes } = useFleetStore();
-  const fines = useFineStore((s) => s.fines);
   const students = useStudentStore((s) => s.students);
   const attendanceHistory = useAttendanceStore((s) => s.attendanceHistory);
   const markAttendance = useAttendanceStore((s) => s.markAttendance);
+  const redeemTicket = useTransportWorkflowStore((s) => s.redeemTicket);
+  const updateStudent = useRosterStore((s) => s.updateStudent);
 
   const conductor = conductors.find((c) => c.id === user?.id);
   const bus = buses.find((b) => b.id === conductor?.assignedBusId);
@@ -96,11 +97,7 @@ export default function ConductorScanner() {
       setIsOnline(true);
       const queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || "[]");
       if (queue.length > 0) {
-        toast.success(`Syncing ${queue.length} queued scans to server...`);
-        setTimeout(() => {
-          localStorage.setItem(QUEUE_KEY, "[]");
-          setQueueLength(0);
-        }, 1200);
+        toast.info(`${queue.length} scan(s) remain saved in this browser. Server sync is not available in this frontend demo.`);
       }
     };
     const goOffline = () => setIsOnline(false);
@@ -124,10 +121,42 @@ export default function ConductorScanner() {
       if (processingRef.current) return;
       processingRef.current = true;
 
-      const result = validateScan(decodedText, route?.id, boardedSet, fines, students);
+      let ticketPayload = null;
+      try {
+        const decoded = JSON.parse(decodedText);
+        if (decoded?.type === "SMARTU_TICKET" && typeof decoded.token === "string") ticketPayload = decoded;
+      } catch {
+        ticketPayload = null;
+      }
+
+      if (ticketPayload) {
+        const result = redeemTicket(ticketPayload.token, route?.id);
+        if (!result.success) {
+          playTone(false);
+          setFlash({ ok: false, reason: result.error });
+        } else {
+          playTone(true);
+          const ticketStudent = students.find((record) => record.id === result.ticket.userId);
+          setFlash({ ok: true, name: `${ticketStudent?.name || result.ticket.userName} · ${result.ticket.status}` });
+          const remainingActive = useTransportWorkflowStore.getState().tickets.some(
+            (ticket) => ticket.userId === result.ticket.userId && ["Active", "HalfRedeemed"].includes(ticket.status)
+          );
+          if (result.ticket.status === "Redeemed" && !remainingActive && ticketStudent) {
+            updateStudent(ticketStudent.id, { routeId: null, pickupStop: null });
+          }
+        }
+        setTimeout(() => {
+          setFlash(null);
+          processingRef.current = false;
+        }, 2500);
+        return;
+      }
+
+      const result = validateScan(decodedText, route?.id, boardedSet, students);
 
       if (result.allowed) {
         markAttendance({
+          userId: result.student.id,
           rollNo: result.student.rollNo,
           routeId: route.id,
           busId: bus.id,
@@ -154,7 +183,7 @@ export default function ConductorScanner() {
         processingRef.current = false;
       }, 2500);
     },
-    [route, bus, boardedSet, fines, students, markAttendance, isOnline]
+    [route, bus, boardedSet, students, markAttendance, redeemTicket, updateStudent, isOnline]
   );
 
   // ---- Camera lifecycle ----

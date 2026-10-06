@@ -35,7 +35,7 @@ import { useSocketStore } from "@/store/useSocketStore";
 
 const STATUS_VARIANT = { Active: "success", "On Leave": "warning", Reserve: "secondary", Suspended: "destructive" };
 
-function StaffTable({ rows, buses, kind, onReassign, onStatusChange, onDelete }) {
+function StaffTable({ rows, buses, onReassign, onStatusChange, onDelete }) {
   return (
     <Table>
       <TableHeader>
@@ -132,6 +132,7 @@ export default function Staff() {
 
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState({ name: "", phone: "", kind: "driver", loginId: "" });
+  const [createdStaff, setCreatedStaff] = useState(null);
 
   const openReassign = (kind, staff) => {
     setReassignTarget({ kind, staff });
@@ -205,24 +206,42 @@ export default function Staff() {
 
   const handleAddStaff = (e) => {
     e.preventDefault();
-    if (!addForm.name.trim()) return;
+    if (!addForm.name.trim()) {
+      toast.error("Enter the staff member's name.");
+      return;
+    }
+    const records = [...drivers, ...conductors];
+    const prefix = addForm.kind === "driver" ? "driver" : "conductor";
+    let suffix = 1;
+    while (records.some((record) => record.loginId?.toLowerCase() === `${prefix}_${suffix}`)) suffix += 1;
+    const loginId = addForm.loginId.trim() || `${prefix}_${suffix}`;
+    if (records.some((record) => record.loginId?.toLowerCase() === loginId.toLowerCase())) {
+      toast.error("That login username is already in use.");
+      return;
+    }
+    const password = `${prefix}123`;
 
     if (addForm.kind === "driver") {
       addDriver({
         name: addForm.name,
         phone: addForm.phone || "0300-0000000",
-        loginId: addForm.loginId || `driver_${drivers.length + 1}`,
+        loginId,
+        password,
       });
       toast.success(`Driver ${addForm.name} added successfully.`);
     } else {
       addConductor({
         name: addForm.name,
         phone: addForm.phone || "0300-0000000",
-        loginId: addForm.loginId || `conductor_${conductors.length + 1}`,
+        loginId,
+        password,
       });
       toast.success(`Conductor ${addForm.name} added successfully.`);
     }
 
+    const credentials = { name: addForm.name, loginId, password, role: addForm.kind };
+    setCreatedStaff(credentials);
+    console.info("Development temporary staff credentials:", credentials);
     setAddOpen(false);
     setAddForm({ name: "", phone: "", kind: "driver", loginId: "" });
   };
@@ -254,7 +273,6 @@ export default function Staff() {
               <StaffTable
                 rows={drivers}
                 buses={buses}
-                kind="driver"
                 onReassign={(s) => openReassign("driver", s)}
                 onStatusChange={(id, val) => handleStatusChange("driver", id, val)}
                 onDelete={(id) => handleDelete("driver", id)}
@@ -264,7 +282,6 @@ export default function Staff() {
               <StaffTable
                 rows={conductors}
                 buses={buses}
-                kind="conductor"
                 onReassign={(s) => openReassign("conductor", s)}
                 onStatusChange={(id, val) => handleStatusChange("conductor", id, val)}
                 onDelete={(id) => handleDelete("conductor", id)}
@@ -374,7 +391,20 @@ export default function Staff() {
           </form>
         </DialogContent>
       </Dialog>
+      <Dialog open={!!createdStaff} onOpenChange={(open) => !open && setCreatedStaff(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Temporary staff credentials</DialogTitle>
+            <DialogDescription>Share these credentials through the Transport Office. Email delivery is not configured in this frontend demo.</DialogDescription>
+          </DialogHeader>
+          {createdStaff && <div className="space-y-2 rounded-md border border-border p-4 text-sm">
+            <p><strong>{createdStaff.name}</strong> · {createdStaff.role}</p>
+            <p>Username: <code>{createdStaff.loginId}</code></p>
+            <p>Temporary password: <code>{createdStaff.password}</code></p>
+          </div>}
+          <DialogFooter><Button onClick={() => setCreatedStaff(null)}>Done</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-

@@ -6,15 +6,9 @@ import { useAttendanceStore } from "@/store/useAttendanceStore";
 import { useStudentStore } from "@/store/useStudentStore";
 import { useFleetStore } from "@/store/useFleetStore";
 
-const MOCK_ATTENDANCE = [
-  { id: 1, name: "Ahmed Raza", rollNo: "22F-3082", route: "RT-01", stop: "D-Ground Chowk", time: "7:14 AM", date: "Today", status: "Boarded", type: "NFC Tap" },
-  { id: 2, name: "Fatima Noor", rollNo: "22F-3091", route: "RT-02", stop: "Millat Town", time: "7:20 AM", date: "Today", status: "Boarded", type: "QR Scan" },
-  { id: 3, name: "Usman Tariq", rollNo: "22K-1187", route: "RT-01", stop: "Susan Road", time: "7:39 AM", date: "Today", status: "Boarded", type: "NFC Tap" },
-  { id: 4, name: "Hassan Ali", rollNo: "21F-2871", route: "RT-03", stop: "Jail Road", time: "7:25 AM", date: "Today", status: "Boarded", type: "Manual Entry" },
-];
-
 export default function AdminAttendance() {
   const [search, setSearch] = useState("");
+  const [selectedDate, setSelectedDate] = useState("");
   const attendanceHistory = useAttendanceStore((state) => state.attendanceHistory);
   const students = useStudentStore((state) => state.students);
   const routes = useFleetStore((state) => state.routes);
@@ -28,22 +22,33 @@ export default function AdminAttendance() {
       route: routes.find((route) => route.id === record.routeId)?.shortName || record.routeId,
       stop: record.stop,
       time: record.time,
-      date: record.date === today ? "Today" : record.date,
+      date: (record.adate || record.date) === today ? "Today" : record.adate || record.date,
       type: record.method,
     }));
-  const scannedToday = new Set(
-    scannedAttendance.filter((record) => record.date === "Today").map((record) => record.rollNo)
-  );
-  const attendanceLogs = [
-    ...scannedAttendance,
-    ...MOCK_ATTENDANCE.filter((record) => !scannedToday.has(record.rollNo)),
-  ];
+  const attendanceLogs = scannedAttendance;
 
   const filtered = attendanceLogs.filter(a =>
-    a.name.toLowerCase().includes(search.toLowerCase()) || 
-    a.rollNo.toLowerCase().includes(search.toLowerCase()) ||
-    a.route.toLowerCase().includes(search.toLowerCase())
+    (!selectedDate || (a.date === "Today" ? today : a.date) === selectedDate) &&
+    (a.name.toLowerCase().includes(search.toLowerCase()) ||
+      a.rollNo.toLowerCase().includes(search.toLowerCase()) ||
+      a.route.toLowerCase().includes(search.toLowerCase()))
   );
+  const exportCsv = () => {
+    const columns = ["rollNo", "name", "date", "route", "stop", "time", "type"];
+    const escapeCell = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+    const content = [
+      columns.join(","),
+      ...filtered.map((record) => columns.map((key) =>
+        escapeCell(key === "date" && record.date === "Today" ? today : record[key])
+      ).join(",")),
+    ].join("\r\n");
+    const url = URL.createObjectURL(new Blob([content], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "attendance.csv";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
 
   return (
     <div className="space-y-6">
@@ -54,7 +59,7 @@ export default function AdminAttendance() {
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">Monitor real-time student boarding scans across all routes.</p>
         </div>
-        <Button variant="outline" className="gap-2">
+        <Button variant="outline" className="gap-2" onClick={exportCsv}>
           <Download className="h-4 w-4" /> Export CSV
         </Button>
       </div>
@@ -69,7 +74,7 @@ export default function AdminAttendance() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Input type="date" className="w-auto bg-card" />
+        <Input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className="w-auto bg-card" />
       </div>
 
       <div className="rounded-xl border border-border bg-card overflow-hidden">

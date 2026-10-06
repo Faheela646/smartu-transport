@@ -12,7 +12,6 @@ import {
   Receipt,
   ArrowRight,
   ShieldCheck,
-  Radio,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,7 +21,7 @@ import { useAuthStore } from "@/store/useAuthStore";
 import { useStudentStore } from "@/store/useStudentStore";
 import { useFleetStore } from "@/store/useFleetStore";
 import { useAttendanceStore } from "@/store/useAttendanceStore";
-import { useFineStore } from "@/store/useFineStore";
+import { useTransportWorkflowStore } from "@/store/useTransportWorkflowStore";
 import { ANNOUNCEMENTS } from "@/data/mockData";
 import { initials, formatDate } from "@/lib/utils";
 
@@ -30,10 +29,9 @@ export default function Home() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const students = useStudentStore((s) => s.students);
-  const routes = useFleetStore((s) => s.routes);
-  const buses = useFleetStore((s) => s.buses);
+  const { routes, buses, drivers, conductors } = useFleetStore();
   const attendanceHistory = useAttendanceStore((s) => s.attendanceHistory);
-  const fines = useFineStore((s) => s.fines);
+  const { semesterPayments, tickets, violations } = useTransportWorkflowStore();
 
   // Student profile lookup
   const student = students.find(
@@ -44,18 +42,36 @@ export default function Home() {
     name: user?.name || "Student",
     rollNo: user?.rollNo || user?.loginId || "",
     role: user?.role || "DAY_SCHOLAR",
-    routeId: "RT-01",
+    accountStatus: user?.accountStatus || "N/A",
+    routeId: null,
   };
   const today = new Date().toISOString().slice(0, 10);
   const todayAttendance = attendanceHistory.find(
     (record) => record.rollNo === student.rollNo && record.date === today
   );
 
-  const studentRoute = routes.find((r) => r.id === student.routeId) || routes[0];
-  const assignedBus = buses.find((b) => b.id === studentRoute?.busId) || buses[0];
-  const pickupStop = studentRoute?.stops[1] || studentRoute?.stops[0];
-
-  const studentFines = student.rollNo ? fines.filter((f) => f.rollNo === student.rollNo && f.status !== "Cleared") : [];
+  const isHostelite = student.role === "HOSTELITE";
+  const latestSemesterPayment = semesterPayments.find((record) => record.userId === student.id);
+  const latestTicket = tickets.find((record) => record.userId === student.id);
+  const activeTicket = tickets.find((record) =>
+    record.userId === student.id && ["Active", "HalfRedeemed"].includes(record.status)
+  );
+  const hasTransportAccess = isHostelite ? Boolean(activeTicket) : student.accountStatus === "Approved";
+  const transportRouteId = isHostelite ? activeTicket?.routeId : hasTransportAccess ? student.routeId : null;
+  const studentRoute = routes.find((route) => route.id === transportRouteId);
+  const assignedBus = buses.find((bus) => bus.id === studentRoute?.busId);
+  const pickupStopName = isHostelite ? activeTicket?.stopId : student.pickupStop;
+  const pickupStop = studentRoute?.stops.find((stop) => stop.name === pickupStopName);
+  const assignedDriver = drivers.find((driver) => driver.id === studentRoute?.driverId);
+  const assignedConductor = conductors.find((conductor) => conductor.id === studentRoute?.conductorId);
+  const studentFines = violations.flatMap((violation) =>
+    violation.users.filter((record) => record.userId === student.id && record.paymentStatus !== "Resolved")
+  );
+  const application = isHostelite ? latestTicket : latestSemesterPayment;
+  const applyPath = isHostelite ? "/student/tickets" : "/student/semester";
+  const accessLabel = isHostelite
+    ? activeTicket?.status || latestTicket?.status || "No ticket"
+    : student.accountStatus || "N/A";
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -93,8 +109,8 @@ export default function Home() {
           <Button variant="outline" size="sm" onClick={() => navigate("/student/attendance")}>
             <QrCode className="h-4 w-4 mr-1.5 text-primary" /> My QR
           </Button>
-          <Button size="sm" onClick={() => navigate("/student/transport")}>
-            <Bus className="h-4 w-4 mr-1.5" /> Live Map
+          <Button size="sm" onClick={() => navigate(hasTransportAccess ? "/student/transport" : applyPath)}>
+            <Bus className="h-4 w-4 mr-1.5" /> {hasTransportAccess ? "Live Map" : isHostelite ? "Request Ticket" : "Apply for Transport"}
           </Button>
         </div>
       </div>
@@ -108,12 +124,12 @@ export default function Home() {
                 <Bus className="h-5 w-5" />
               </div>
               <div>
-                <CardTitle className="text-base font-bold">Today's Shuttle Transport</CardTitle>
-                <p className="text-xs text-muted-foreground">{studentRoute?.name}</p>
+                <CardTitle className="text-base font-bold">Transport Application & Route</CardTitle>
+                <p className="text-xs text-muted-foreground">{studentRoute?.name || "No active route assignment"}</p>
               </div>
             </div>
-            <Badge variant="success" className="animate-pulse">
-              <Radio className="h-3 w-3 mr-1" /> On Route
+            <Badge variant={hasTransportAccess ? "success" : accessLabel === "Rejected" ? "destructive" : "warning"}>
+              {accessLabel}
             </Badge>
           </div>
         </CardHeader>
@@ -122,35 +138,37 @@ export default function Home() {
             <div className="rounded-xl bg-secondary/50 p-3.5 border border-border/40">
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Bus & Plate</p>
               <p className="text-sm font-bold text-foreground mt-1 flex items-center gap-1.5">
-                <Bus className="h-4 w-4 text-primary" /> {assignedBus?.model} ({assignedBus?.plate})
+                <Bus className="h-4 w-4 text-primary" /> {assignedBus ? `${assignedBus.model} (${assignedBus.plate})` : "Not assigned"}
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">Bus ID: {assignedBus?.id}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{assignedBus ? `Bus ID: ${assignedBus.id}` : "Available after approval and assignment"}</p>
             </div>
 
             <div className="rounded-xl bg-secondary/50 p-3.5 border border-border/40">
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Your Pickup Stop</p>
               <p className="text-sm font-bold text-foreground mt-1 flex items-center gap-1.5">
-                <MapPin className="h-4 w-4 text-primary" /> {pickupStop?.name}
+                <MapPin className="h-4 w-4 text-primary" /> {pickupStop?.name || "Not selected"}
               </p>
-              <p className="text-xs text-muted-foreground mt-0.5">Scheduled: {pickupStop?.eta}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{pickupStop ? `Scheduled: ${pickupStop.eta}` : "Select a stop in your application"}</p>
             </div>
 
             <div className="rounded-xl bg-primary/10 p-3.5 border border-primary/20">
-              <p className="text-[11px] font-semibold text-primary uppercase tracking-wider">Expected Arrival</p>
+              <p className="text-[11px] font-semibold text-primary uppercase tracking-wider">Departure</p>
               <p className="text-base font-bold text-primary mt-1 flex items-center gap-1.5">
-                <Clock className="h-4 w-4" /> Arriving in 7 mins
+                <Clock className="h-4 w-4" /> {studentRoute?.departureTime || "Unavailable"}
               </p>
-              <p className="text-xs text-primary/80 mt-0.5">Live ETA • 2.1 km away</p>
+              <p className="text-xs text-primary/80 mt-0.5">Live location/ETA unavailable in this frontend demo.</p>
             </div>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <ShieldCheck className="h-4 w-4 text-emerald-500" />
-              <span>Conductor: Aslam Chaudhry • Driver: M. Arshad</span>
+              <span>
+                Conductor: {assignedConductor?.name || "Not assigned"} • Driver: {assignedDriver?.name || "Not assigned"}
+              </span>
             </div>
-            <Button variant="ghost" size="sm" className="text-primary hover:text-primary gap-1" onClick={() => navigate("/student/transport")}>
-              View Live Route & Map <ArrowRight className="h-3.5 w-3.5" />
+            <Button variant="ghost" size="sm" className="text-primary hover:text-primary gap-1" onClick={() => navigate(hasTransportAccess ? "/student/transport" : applyPath)}>
+              {hasTransportAccess ? "View Route & Map" : "Continue application"} <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           </div>
         </CardContent>
@@ -172,14 +190,14 @@ export default function Home() {
           </button>
 
           <button
-            onClick={() => navigate("/student/transport")}
+            onClick={() => navigate(hasTransportAccess ? "/student/transport" : applyPath)}
             className="flex flex-col items-center justify-center p-4 rounded-xl border border-border bg-card hover:bg-secondary/60 transition-all text-center group shadow-xs"
           >
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 group-hover:scale-105 transition-transform mb-2">
               <Bus className="h-5 w-5" />
             </div>
-            <span className="text-xs font-semibold text-foreground">Live Tracking</span>
-            <span className="text-[10px] text-muted-foreground mt-0.5">Shuttle Location</span>
+            <span className="text-xs font-semibold text-foreground">{hasTransportAccess ? "Route & Tracking" : "Transport Access"}</span>
+            <span className="text-[10px] text-muted-foreground mt-0.5">{hasTransportAccess ? "Route details" : isHostelite ? "Request a ticket" : "Apply for semester"}</span>
           </button>
 
           <button
@@ -238,7 +256,11 @@ export default function Home() {
                 {todayAttendance ? "Marked Present" : "Not Marked"}
               </p>
               <p className="text-[11px] text-muted-foreground mt-1">
-                {todayAttendance ? `Boarded at ${todayAttendance.time}` : "Show your QR to the conductor"}
+                {todayAttendance
+                  ? `Boarded at ${todayAttendance.time}`
+                  : student.accountStatus === "Approved" || isHostelite && activeTicket
+                    ? "Show your QR to the conductor"
+                    : "Available after transport approval"}
               </p>
             </div>
             <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${todayAttendance ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>
@@ -250,9 +272,11 @@ export default function Home() {
         <Card className="border-border">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs text-muted-foreground font-medium">Transport Fee</p>
-              <p className="text-base font-bold text-foreground mt-0.5">Rs. 5,000</p>
-              <Badge variant="success" className="mt-1">Paid • Sept 2026</Badge>
+              <p className="text-xs text-muted-foreground font-medium">{isHostelite ? "Ticket payment" : "Semester fee"}</p>
+              <p className="text-base font-bold text-foreground mt-0.5">{application ? `Rs. ${Number(application.amount).toLocaleString()}` : "No request"}</p>
+              <Badge variant={application ? (application.status === "Approved" || ["Active", "HalfRedeemed"].includes(application.status) ? "success" : application.status === "Rejected" ? "destructive" : "warning") : "secondary"} className="mt-1">
+                {application?.status || "Not submitted"}
+              </Badge>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600">
               <Receipt className="h-5 w-5" />
@@ -264,8 +288,8 @@ export default function Home() {
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground font-medium">Current Shuttle Status</p>
-              <p className="text-base font-bold text-foreground mt-0.5">On Route</p>
-              <p className="text-[11px] text-muted-foreground mt-1">BUS-101 (FSD-2023)</p>
+              <p className="text-base font-bold text-foreground mt-0.5">{hasTransportAccess ? (assignedBus ? "Pass approved" : "Bus not assigned") : "No active pass"}</p>
+              <p className="text-[11px] text-muted-foreground mt-1">{assignedBus ? `${assignedBus.id} (${assignedBus.plate})` : accessLabel}</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600">
               <Bus className="h-5 w-5" />
@@ -278,9 +302,9 @@ export default function Home() {
             <div>
               <p className="text-xs text-muted-foreground font-medium">Active Alerts / Fines</p>
               <p className="text-base font-bold text-foreground mt-0.5">
-                {studentFines.length > 0 ? `${studentFines.length} Pending Fine` : "No Fines"}
+                {studentFines.length > 0 ? `${studentFines.length} Unresolved Fine(s)` : "No unresolved fines"}
               </p>
-              <p className="text-[11px] text-muted-foreground mt-1">1 Broadcast Notice</p>
+              <p className="text-[11px] text-muted-foreground mt-1">{ANNOUNCEMENTS.length} demo broadcast(s)</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600">
               <Megaphone className="h-5 w-5" />
